@@ -56,7 +56,7 @@ class MergedContributions:
     @classmethod
     def empty(cls) -> "MergedContributions":
         """Create an empty MergedContributions object."""
-        return cls(total=Decimal(0), party={}, breakdown={})
+        return cls(total=Decimal(0), by_party={}, by_committee={})
 
     def add(
         self, contribution: "Contribution", committees: dict[str, Committee]
@@ -269,10 +269,16 @@ def munge(fec_path: str, nicks_path: str, committees_path: str):
     for key, value in contributors.items():
         str_key = f"{key[0]}-{key[1]}-{key[2]}"
         total = str(value.total)
-        party_json_safe = {party: str(amount) for party, amount in value.party.items()}
+        party_json_safe = {
+            party: str(amount) for party, amount in value.by_party.items()
+        }
         breakdown_json_safe = {
             committee_id: [committee_name, party, str(amount)]
-            for committee_id, (committee_name, party, amount) in value.breakdown.items()
+            for committee_id, (
+                committee_name,
+                party,
+                amount,
+            ) in value.by_committee.items()
         }
         jsonable = {
             "id": str_key,

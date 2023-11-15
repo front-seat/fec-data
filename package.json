@@ -1,0 +1,11 @@
+{
+  "name": "fec-data",
+  "version": "0.1.0",
+  "description": "Node tooling for the FEC data project",
+  "author": "Dave Peck <dave@frontseat.org>",
+  "license": "MIT",
+  "private": true,
+  "devDependencies": {
+    "pyright": "^1.1.336"
+  }
+}
