@@ -1,0 +1,32 @@
+name: "Test TopUP"
+
+on: push
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the `fec-data` repository
+        uses: actions/checkout@v3
+      - name: Install python 3.12.x
+        uses: actions/setup-python@v4
+        id: install-python
+        with:
+          python-version: "3.12"
+      - name: Install python dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          deactivate
+      - name: Run pre-commit checks
+        run: |
+          source .venv/bin/activate
+          pre-commit run --all
+          deactivate
+      - name: Run python tests
+        run: |
+          source .venv/bin/activate
+          python -m unittest discover -s topup
+          deactivate

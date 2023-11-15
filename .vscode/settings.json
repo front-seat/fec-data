@@ -1,0 +1,20 @@
+{
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.ignore": [".venv/**"],
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": true
+    },
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  },
+  "[django-html]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "monosans.djlint"
+  },
+  "search.exclude": {
+    "data/**": true,
+    "docs/**": true
+  },
+  "terminal.integrated.scrollback": 10000
+}
