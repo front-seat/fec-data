@@ -19,7 +19,7 @@ PHYSICAL ZIP,PHYSICAL CITY,PHYSICAL STATE
 class ZipCodeManagerTestCase(TestCase):
     def setUp(self):
         self.data = io.StringIO(FAKE_CSV_DATA)
-        self.zip_code_manager = z.ZipCodeManager(self.data)
+        self.zip_code_manager = z.ZipCodeManager.from_csv_io(self.data)
         self.new_york = z.CityState("NEW YORK", "NY")
         self.seattle = z.CityState("SEATTLE", "WA")
 

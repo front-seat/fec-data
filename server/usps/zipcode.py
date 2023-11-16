@@ -31,33 +31,36 @@ class ZipCodeManager:
     _city_to_zip_codes: dict[CityState, set[ZipCode]] | None
     _zip5_to_city: dict[str, CityState] | None
 
-    def __init__(self, data: t.TextIO) -> None:
-        self._load_zip_codes(data)
+    def __init__(self, zip_codes: t.Sequence[ZipCode]) -> None:
+        self._zip_codes = list(zip_codes)
         self._city_to_zip_codes = None
         self._zip5_to_city = None
 
     @classmethod
-    def from_path(cls, path: str | pathlib.Path) -> "ZipCodeManager":
-        """Return a ZipCodeManager with the given path."""
-        path = validate_extant_file(pathlib.Path(path))
-        with open(path) as f:
-            return cls(f)
-
-    @classmethod
-    def from_data_manager(cls, data_manager: DataManager) -> "ZipCodeManager":
-        """Return a ZipCodeManager with the same path as the given DataManager."""
-        return cls.from_path(data_manager.path / "usps" / "unique-zips.csv")
-
-    def _load_zip_codes(self, data: t.TextIO) -> None:
-        self._zip_codes = []
-        reader = csv.DictReader(data)
+    def from_csv_io(cls, io: t.TextIO) -> "ZipCodeManager":
+        """Return a ZipCodeManager with the given io stream."""
+        zip_codes = []
+        reader = csv.DictReader(io)
         for row in reader:
             zip_code = ZipCode(
                 zip5=row["PHYSICAL ZIP"],
                 city=row["PHYSICAL CITY"],
                 state=row["PHYSICAL STATE"],
             )
-            self._zip_codes.append(zip_code)
+            zip_codes.append(zip_code)
+        return cls(zip_codes)
+
+    @classmethod
+    def from_path(cls, path: str | pathlib.Path) -> "ZipCodeManager":
+        """Return a ZipCodeManager with the given path."""
+        path = validate_extant_file(pathlib.Path(path))
+        with open(path) as f:
+            return cls.from_csv_io(f)
+
+    @classmethod
+    def from_data_manager(cls, data_manager: DataManager) -> "ZipCodeManager":
+        """Return a ZipCodeManager with the same path as the given DataManager."""
+        return cls.from_path(data_manager.path / "usps" / "unique-zips.csv")
 
     def _index_cities(self) -> None:
         assert self._city_to_zip_codes is None
