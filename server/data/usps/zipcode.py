@@ -3,14 +3,11 @@ import pathlib
 import typing as t
 from dataclasses import dataclass
 
-from server.data import DataManager
+from server.data.manager import DataManager
 from server.utils.validations import validate_extant_file
 
-
-@dataclass(frozen=True)
-class CityState:
-    city: str
-    state: str
+from .city_state import CityState
+from .metros import MajorMetros
 
 
 @dataclass(frozen=True)
@@ -44,8 +41,8 @@ class ZipCodeManager:
         for row in reader:
             zip_code = ZipCode(
                 zip5=row["PHYSICAL ZIP"],
-                city=row["PHYSICAL CITY"],
-                state=row["PHYSICAL STATE"],
+                city=row["PHYSICAL CITY"].upper().strip(),
+                state=row["PHYSICAL STATE"].upper().strip(),
             )
             zip_codes.append(zip_code)
         return cls(zip_codes)
@@ -86,12 +83,12 @@ class ZipCodeManager:
             self._index_zip5s()
 
     @property
-    def zip_codes(self) -> list[ZipCode]:
+    def zip_codes(self) -> t.Sequence[ZipCode]:
         """Return a list of all unique ZIP codes."""
         return self._zip_codes
 
     @property
-    def city_to_zip_codes(self) -> dict[CityState, set[ZipCode]]:
+    def city_to_zip_codes(self) -> t.Mapping[CityState, set[ZipCode]]:
         """
         Return a dict mapping each city to a set of all unique ZIP
         codes in that city.
@@ -101,8 +98,20 @@ class ZipCodeManager:
         return self._city_to_zip_codes
 
     @property
-    def zip5_to_city(self) -> dict[str, CityState]:
+    def zip5_to_city(self) -> t.Mapping[str, CityState]:
         """Return a dict mapping each ZIP5 to the city and state it belongs to."""
         self._index_zip5s_if_needed()
         assert self._zip5_to_city is not None
         return self._zip5_to_city
+
+    def get_zip_codes(self, city: str | CityState | None) -> set[ZipCode]:
+        """Return a set of all unique ZIP codes in the given city."""
+        if isinstance(city, str):
+            city = MajorMetros.for_city(city)
+        if city is None:
+            return set()
+        return self.city_to_zip_codes.get(city, set())
+
+    def get_city_state(self, zip5: str) -> CityState | None:
+        """Return the city and state for the given ZIP5."""
+        return self.zip5_to_city.get(zip5)
