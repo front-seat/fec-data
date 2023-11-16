@@ -1,4 +1,4 @@
-name: "Test TopUP"
+name: "Test FEC Data"
 
 on: push
 
@@ -36,5 +36,5 @@ jobs:
       - name: Run python tests
         run: |
           source .venv/bin/activate
-          python -m unittest discover -s topup
+          python -m unittest discover -s server
           deactivate
