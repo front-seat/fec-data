@@ -164,15 +164,25 @@ class NicknamesManager:
         """Create a manager from a data manager."""
         return cls.from_path(data_manager.path / "names" / "nicknames.json")
 
-    def to_jsonl(self) -> t.Iterable[list[str]]:
+    def to_data_lines(self) -> t.Iterable[list[str]]:
         """Convert to a json-serializable object."""
-        return [list(names) for names in self.names]
+        return (list(names) for names in self.names)
 
-    def to_io(self, io: t.TextIO) -> None:
+    def to_jsonl_io(self, io: t.TextIO) -> None:
         """Write to a json file."""
-        for json_line in self.to_jsonl():
-            io.write(json.dumps(json_line))
+        for data_line in self.to_data_lines():
+            io.write(json.dumps(data_line))
             io.write("\n")
+
+    def to_jsonl_path(self, path: str | pathlib.Path) -> None:
+        """Write to a json file."""
+        path = pathlib.Path(path)
+        with path.open("wt") as output_file:
+            self.to_jsonl_io(output_file)
+
+    def to_jsonl_data_manager(self, data_manager: DataManager) -> None:
+        """Write to a json file."""
+        self.to_jsonl_path(data_manager.path / "names" / "nicknames.json")
 
     def _index_names(self) -> None:
         """Index the merged names."""

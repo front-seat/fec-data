@@ -36,6 +36,54 @@ class StringValidationTestCase(TestCase):
             v.validate_str_or_none(42)
 
 
+class DictValidationTestCase(TestCase):
+    def test_is_dict_true(self):
+        self.assertTrue(v.is_dict({"foo": "bar"}))
+
+    def test_is_dict_false(self):
+        self.assertFalse(v.is_dict(42))
+
+    def test_validate_dict(self):
+        self.assertEqual(v.validate_dict({"foo": "bar"}), {"foo": "bar"})
+
+    def test_validate_dict_raises(self):
+        with self.assertRaises(v.ValidationError):
+            v.validate_dict(42)
+
+
+class DictContentValidationTestCase(TestCase):
+    def test_get_str_true(self):
+        self.assertEqual(v.get_str({"foo": "bar"}, "foo"), "bar")
+
+    def test_get_str_false_key_not_found(self):
+        with self.assertRaises(v.ValidationError):
+            v.get_str({"foo": "bar"}, "baz")
+
+    def test_get_str_false_value_not_str(self):
+        with self.assertRaises(v.ValidationError):
+            v.get_str({"foo": 42}, "foo")
+
+    def test_get_optional_str_true(self):
+        self.assertEqual(v.get_optional_str({"foo": "bar"}, "foo"), "bar")
+        self.assertEqual(v.get_optional_str({}, "foo"), None)
+
+    def test_get_optional_str_false_value_not_str(self):
+        with self.assertRaises(v.ValidationError):
+            v.get_optional_str({"foo": 42}, "foo")
+
+    def test_get_str_or_none_true(self):
+        self.assertEqual(v.get_str_or_none({"foo": "bar"}, "foo"), "bar")
+        self.assertEqual(v.get_str_or_none({"foo": None}, "foo"), None)
+
+    def test_get_str_or_none_false_key_not_found(self):
+        with self.assertRaises(v.ValidationError):
+            v.get_str_or_none({"foo": "bar"}, "baz")
+
+    def test_get_str_or_none_false_value_not_str(self):
+        with self.assertRaises(v.ValidationError):
+            v.get_str_or_none({"foo": 42}, "foo")
+
+
 class DirValidationTestCase(TestCase):
     def test_is_extant_dir_true(self):
         with tempfile.TemporaryDirectory() as temp_dir:

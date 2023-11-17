@@ -7,6 +7,11 @@ class ValidationError(Exception):
     pass
 
 
+#
+# Basic type validations
+#
+
+
 def is_str(value: object) -> bool:
     """Return True if the value is a string."""
     return isinstance(value, str)
@@ -29,6 +34,58 @@ def validate_str_or_none(value: object) -> str | None:
     if value is None or isinstance(value, str):
         return value
     raise ValidationError(f"Expected a string or None, got {value}")
+
+
+def is_dict(value: object) -> bool:
+    """Return True if the value is a dict."""
+    return isinstance(value, dict)
+
+
+def validate_dict(value: object) -> dict:
+    """Return the value if it is a dict, otherwise raise an exception."""
+    if isinstance(value, dict):
+        return value
+    raise ValidationError(f"Expected a dict, got {value}")
+
+
+#
+# Dict content validations
+#
+
+
+def get_str(d: dict, key: str) -> str:
+    """
+    Return the value for `key` in `d` if it is a string,
+    otherwise raise an exception.
+    """
+    if key not in d:
+        raise ValidationError(f"Key '{key}' not found in {d}")
+    return validate_str(d[key])
+
+
+def get_optional_str(d: dict, key: str) -> str | None:
+    """
+    Return the value for `key` in `d` if it is a string,
+    otherwise raise an exception.
+    """
+    if key not in d:
+        return None
+    return validate_str(d[key])
+
+
+def get_str_or_none(d: dict, key: str) -> str | None:
+    """
+    Return the value for `key` in `d` if it is a string or None,
+    otherwise raise an exception.
+    """
+    if key not in d:
+        raise ValidationError(f"Key '{key}' not found in {d}")
+    return validate_str_or_none(d[key])
+
+
+#
+# Path validations
+#
 
 
 def is_extant_dir(path: pathlib.Path) -> bool:
