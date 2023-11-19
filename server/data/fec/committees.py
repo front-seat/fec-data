@@ -53,6 +53,13 @@ class CommitteeTypeCode:
 
 
 class CommitteeColumns:
+    """
+    Column indices for the committee master file.
+
+    See:
+    https://www.fec.gov/campaign-finance-data/committee-master-file-description/
+    """
+
     ID = 0  # CMTE_ID
     NAME = 1  # CMTE_NM
     TREASURER_NAME = 2  # TRES_NM
@@ -140,6 +147,28 @@ class Committee:
         if self.candidate_id is not None:
             data["candidate_id"] = self.candidate_id
         return data
+
+
+class IGetCommittee(t.Protocol):
+    """Interface for getting a committee."""
+
+    def get_committee(self, id: str) -> Committee | None:
+        """Get the committee with the given id, or None."""
+        ...
+
+
+class MockGetCommittee(IGetCommittee):
+    """A mock implementation of IGetCommittee."""
+
+    _id_to_committee: dict[str, Committee]
+
+    def __init__(self, committees: t.Sequence[Committee]) -> None:
+        """Create a mock implementation."""
+        self._id_to_committee = {committee.id: committee for committee in committees}
+
+    def get_committee(self, id: str) -> Committee | None:
+        """Get the committee with the given id, or None."""
+        return self._id_to_committee.get(id)
 
 
 class CommitteeManager:

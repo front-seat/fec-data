@@ -1,6 +1,7 @@
 # ruff: noqa: D102
 import pathlib
 import tempfile
+from decimal import Decimal
 from unittest import TestCase
 
 from . import validations as v
@@ -51,6 +52,21 @@ class DictValidationTestCase(TestCase):
             v.validate_dict(42)
 
 
+class DecimalValidationTestCase(TestCase):
+    def test_validate_convert_decimal_str(self):
+        self.assertEqual(v.validate_convert_decimal("42"), Decimal("42"))
+
+    def test_validate_convert_decimal_decimal(self):
+        self.assertEqual(v.validate_convert_decimal(Decimal("42")), Decimal("42"))
+
+    def test_validate_convert_decimal_int(self):
+        self.assertEqual(v.validate_convert_decimal(42), Decimal("42"))
+
+    def test_validate_convert_decimal_invalid(self):
+        with self.assertRaises(v.ValidationError):
+            v.validate_convert_decimal("foo")
+
+
 class DictContentValidationTestCase(TestCase):
     def test_get_str_true(self):
         self.assertEqual(v.get_str({"foo": "bar"}, "foo"), "bar")
@@ -82,6 +98,33 @@ class DictContentValidationTestCase(TestCase):
     def test_get_str_or_none_false_value_not_str(self):
         with self.assertRaises(v.ValidationError):
             v.get_str_or_none({"foo": 42}, "foo")
+
+    def test_get_convert_decimal_true_str(self):
+        self.assertEqual(v.get_convert_decimal({"foo": "42"}, "foo"), Decimal("42"))
+
+    def test_get_convert_decimal_true_decimal(self):
+        self.assertEqual(
+            v.get_convert_decimal({"foo": Decimal("42")}, "foo"), Decimal("42")
+        )
+
+    def test_get_convert_decimal_false_inalid(self):
+        with self.assertRaises(v.ValidationError):
+            v.get_convert_decimal({"foo": "wakka"}, "foo")
+
+    def test_get_convert_decimal_false_key_not_found(self):
+        with self.assertRaises(v.ValidationError):
+            v.get_convert_decimal({"foo": "42"}, "baz")
+
+    def test_get_dict_true(self):
+        self.assertEqual(v.get_dict({"foo": {"bar": "baz"}}, "foo"), {"bar": "baz"})
+
+    def test_get_dict_false_key_not_found(self):
+        with self.assertRaises(v.ValidationError):
+            v.get_dict({"foo": {"bar": "baz"}}, "baz")
+
+    def test_get_dict_false_value_not_dict(self):
+        with self.assertRaises(v.ValidationError):
+            v.get_dict({"foo": 42}, "foo")
 
 
 class DirValidationTestCase(TestCase):

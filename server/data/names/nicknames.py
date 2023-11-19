@@ -120,6 +120,30 @@ class MessyNicknamesManager:
         return NicknamesManager(self.names)
 
 
+class IGetNicknameIndex(t.Protocol):
+    """A protocol for getting the index of a nickname."""
+
+    def get_index(self, name: str) -> int | None:
+        """Get the index of a nickname."""
+        ...
+
+
+class MockGetNicknameIndex(IGetNicknameIndex):
+    """A simple implementation of IGetNicknameIndex useful for tests."""
+
+    _name_to_index: dict[str, int]
+
+    def __init__(self, names: t.Sequence[t.Iterable[str]]) -> None:
+        self._name_to_index = {}
+        for index, names_set in enumerate(names):
+            for name in names_set:
+                self._name_to_index[name] = index
+
+    def get_index(self, name: str) -> int | None:
+        """Return the index for a given nickname."""
+        return self._name_to_index.get(name)
+
+
 class NicknamesManager:
     """
     Tool for working with a 'clean' nicknames file.

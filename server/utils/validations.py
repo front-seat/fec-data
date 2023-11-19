@@ -1,4 +1,10 @@
 import pathlib
+import typing as t
+from decimal import Decimal
+
+# CONSIDER: I'm using these for now, but (for instance) pydantic
+# or attrs both provide pretty comprehensive tools here. (I sorta like
+# the explicitness of this, though, maybe?)
 
 
 class ValidationError(Exception):
@@ -12,21 +18,29 @@ class ValidationError(Exception):
 #
 
 
-def is_str(value: object) -> bool:
+def is_str(value: t.Any) -> bool:
     """Return True if the value is a string."""
     return isinstance(value, str)
 
 
-def validate_str(value: object) -> str:
+def validate_str(value: t.Any) -> str:
     """Return the value if it is a string, otherwise raise an exception."""
     if isinstance(value, str):
         return value
     raise ValidationError(f"Expected a string, got {value}")
 
 
-def is_str_or_none(value: object) -> bool:
+def is_str_or_none(value: t.Any) -> bool:
     """Return True if the value is a string or None."""
     return value is None or isinstance(value, str)
+
+
+def validate_convert_decimal(value: t.Any) -> Decimal:
+    """Validate a string or decimal, converting the string to a decimal."""
+    try:
+        return Decimal(value)
+    except Exception:
+        raise ValidationError(f"Expected convertible to decimal, got {value}") from None
 
 
 def validate_str_or_none(value: object) -> str | None:
@@ -81,6 +95,26 @@ def get_str_or_none(d: dict, key: str) -> str | None:
     if key not in d:
         raise ValidationError(f"Key '{key}' not found in {d}")
     return validate_str_or_none(d[key])
+
+
+def get_convert_decimal(d: dict, key: str) -> Decimal:
+    """
+    Return the value for `key` in `d` if it is a string or decimal,
+    otherwise raise an exception.
+    """
+    if key not in d:
+        raise ValidationError(f"Key '{key}' not found in {d}")
+    return validate_convert_decimal(d[key])
+
+
+def get_dict(d: dict, key: str) -> dict:
+    """
+    Return the value for `key` in `d` if it is a `dict`, otherwise
+    raise an exception.
+    """
+    if key not in d:
+        raise ValidationError(f"Key '{key}' not found in {d}")
+    return validate_dict(d[key])
 
 
 #
