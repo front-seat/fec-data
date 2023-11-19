@@ -5,19 +5,19 @@ from decimal import Decimal
 from server.data.names.nicknames import MockGetNicknameIndex
 from server.utils.validations import ValidationError
 
-from . import individual as ind
+from . import contributions as cont
 from .committees import Committee, MockGetCommittee, Party
 
 
 class SplitNameTestCase(unittest.TestCase):
     def test_last_only(self):
-        self.assertEqual(ind.split_name("Smith"), ("Smith", None))
+        self.assertEqual(cont.split_name("Smith"), ("Smith", None))
 
     def test_last_comma_first(self):
-        self.assertEqual(ind.split_name("Smith, John"), ("Smith", "John"))
+        self.assertEqual(cont.split_name("Smith, John"), ("Smith", "John"))
 
     def test_stripping(self):
-        self.assertEqual(ind.split_name(" Smith, John "), ("Smith", "John"))
+        self.assertEqual(cont.split_name(" Smith, John "), ("Smith", "John"))
 
 
 class FuzzyIdentifierTestCase(unittest.TestCase):
@@ -28,7 +28,7 @@ class FuzzyIdentifierTestCase(unittest.TestCase):
 
     def test_last_first_simple(self):
         self.assertEqual(
-            ind.FuzzyIdentifier.from_last_first(
+            cont.FuzzyIdentifier.from_last_first(
                 "Smith", "John", "12345", get_nickname_index=self.get_nickname_index
             ),
             "SMITH-JOHN-12345",
@@ -36,7 +36,7 @@ class FuzzyIdentifierTestCase(unittest.TestCase):
 
     def test_last_no_first_simple(self):
         self.assertEqual(
-            ind.FuzzyIdentifier.from_last_first(
+            cont.FuzzyIdentifier.from_last_first(
                 "Smith", None, "12345", get_nickname_index=self.get_nickname_index
             ),
             "SMITH-NONE-12345",
@@ -44,7 +44,7 @@ class FuzzyIdentifierTestCase(unittest.TestCase):
 
     def test_last_first_nickname(self):
         self.assertEqual(
-            ind.FuzzyIdentifier.from_last_first(
+            cont.FuzzyIdentifier.from_last_first(
                 "Smith",
                 "Davey",
                 "12345",
@@ -56,7 +56,7 @@ class FuzzyIdentifierTestCase(unittest.TestCase):
 
 class ContributionTestCase(unittest.TestCase):
     def test_from_data_valid(self):
-        contribution = ind.Contribution.from_data(
+        contribution = cont.Contribution.from_data(
             {
                 "id": "12345",
                 "committee_id": "C12345",
@@ -77,10 +77,10 @@ class ContributionTestCase(unittest.TestCase):
 
     def test_from_data_invalid(self):
         with self.assertRaises(ValidationError):
-            ind.Contribution.from_data({})
+            cont.Contribution.from_data({})
 
     def test_to_data(self):
-        contribution = ind.Contribution(
+        contribution = cont.Contribution(
             id="12345",
             committee_id="C12345",
             name="Smith, John",
@@ -103,7 +103,7 @@ class ContributionTestCase(unittest.TestCase):
         )
 
     def test_from_contribution_row_valid(self):
-        contribution = ind.Contribution.from_contribution_row(
+        contribution = cont.Contribution.from_contribution_row(
             [
                 "C12345",
                 "",
@@ -111,7 +111,7 @@ class ContributionTestCase(unittest.TestCase):
                 "",
                 "",
                 "",
-                ind.EntityTypeCode.INDIVIDUAL,
+                cont.EntityTypeCode.INDIVIDUAL,
                 "Smith, John",
                 "Seattle",
                 "WA",
@@ -139,7 +139,7 @@ class ContributionTestCase(unittest.TestCase):
         self.assertEqual(contribution.amount, Decimal(10))
 
     def test_from_contribution_row_invalid(self):
-        contribution = ind.Contribution.from_contribution_row(
+        contribution = cont.Contribution.from_contribution_row(
             [
                 "C12345",
                 "",
@@ -147,7 +147,7 @@ class ContributionTestCase(unittest.TestCase):
                 "",
                 "",
                 "",
-                ind.EntityTypeCode.CANDIDATE,
+                cont.EntityTypeCode.CANDIDATE,
                 "Smith, John",
                 "Seattle",
                 "WA",
@@ -169,7 +169,7 @@ class ContributionTestCase(unittest.TestCase):
 
 class ContributionSummaryTestCase(unittest.TestCase):
     def setUp(self):
-        self.contribution_1 = ind.Contribution(
+        self.contribution_1 = cont.Contribution(
             id="12345",
             committee_id="C12345",
             name="Smith, John",
@@ -178,7 +178,7 @@ class ContributionSummaryTestCase(unittest.TestCase):
             zip_code="98101",
             amount=Decimal(10),
         )
-        self.contribution_2 = ind.Contribution(
+        self.contribution_2 = cont.Contribution(
             id="12346",
             committee_id="C67890",
             name="Smith, John",
@@ -187,7 +187,7 @@ class ContributionSummaryTestCase(unittest.TestCase):
             zip_code="98101",
             amount=Decimal(20),
         )
-        self.contribution_3 = ind.Contribution(
+        self.contribution_3 = cont.Contribution(
             id="12347",
             committee_id="CABCDE",
             name="Smith, John",
@@ -220,7 +220,7 @@ class ContributionSummaryTestCase(unittest.TestCase):
         )
 
     def test_new(self):
-        summary = ind.ContributionSummary.new(
+        summary = cont.ContributionSummary.new(
             "SMITH-JOHN-98101",
             self.contribution_1,
             get_committee=self.get_committee,
@@ -236,7 +236,7 @@ class ContributionSummaryTestCase(unittest.TestCase):
         self.assertEqual(summary.by_committee.get("C12345"), Decimal(10))
 
     def test_add(self):
-        summary = ind.ContributionSummary.new(
+        summary = cont.ContributionSummary.new(
             "SMITH-JOHN-98101",
             self.contribution_1,
             get_committee=self.get_committee,
