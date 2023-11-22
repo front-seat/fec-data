@@ -254,3 +254,25 @@ class ContributionSummaryTestCase(unittest.TestCase):
         self.assertEqual(summary.by_committee.get("C12345"), Decimal(10))
         self.assertEqual(summary.by_committee.get("C67890"), Decimal(20))
         self.assertEqual(summary.by_committee.get("CABCDE"), Decimal(50))
+
+    def test_from_data_valid(self):
+        data = {
+            "fuzzy_id": "SMITH-JOHN-98101",
+            "name": "Smith, John",
+            "zip_code": "98101",
+            "total": "80",
+            "by_party": {Party.DEMOCRAT: "30", Party.GREEN: "50"},
+            "by_committee": {"C12345": "10", "C67890": "20", "CABCDE": "50"},
+        }
+        summary = cont.ContributionSummary.from_data(data)
+        self.assertEqual(summary.fuzzy_id, "SMITH-JOHN-98101")
+        self.assertEqual(summary.name, "Smith, John")
+        self.assertEqual(summary.zip_code, "98101")
+        self.assertEqual(summary.total, Decimal(80))
+        self.assertEqual(len(summary.by_party), 2)
+        self.assertEqual(summary.by_party.get(Party.DEMOCRAT), Decimal(30))
+        self.assertEqual(summary.by_party.get(Party.GREEN), Decimal(50))
+        self.assertEqual(len(summary.by_committee), 3)
+        self.assertEqual(summary.by_committee.get("C12345"), Decimal(10))
+        self.assertEqual(summary.by_committee.get("C67890"), Decimal(20))
+        self.assertEqual(summary.by_committee.get("CABCDE"), Decimal(50))

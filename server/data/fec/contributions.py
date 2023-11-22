@@ -330,10 +330,11 @@ class ContributionSummary:
             zip_code=v.get_str(data, "zip_code"),
             total=v.get_convert_decimal(data, "total"),
             by_party={
-                party: Decimal(amount) for party, amount in by_party_data.items()
+                party: v.validate_convert_decimal(amount)
+                for party, amount in by_party_data.items()
             },
             by_committee={
-                committee: Decimal(amount)
+                committee: v.validate_convert_decimal(amount)
                 for committee, amount in by_committee_data.items()
             },
         )
