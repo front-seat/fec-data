@@ -5,6 +5,7 @@ import json
 
 import click
 
+from server.data.fec.committees import CommitteeManager
 from server.data.fec.contributions import (
     ContributionsManager,
     ContributionSummariesManager,
@@ -40,6 +41,32 @@ def clean(data: str | None = None):
     messy_names_manager = MessyNicknamesManager.from_data_manager(data_manager)
     nicknames_manager = messy_names_manager.nicknames_manager
     nicknames_manager.to_jsonl_data_manager(data_manager)
+
+
+@fec.group()
+def committees():
+    """Work with FEC committees data."""
+    pass
+
+
+@committees.command(name="lookup")
+@click.argument("committee_id")
+@click.option(
+    "--data",
+    type=click.Path(exists=True),
+    help="Path to data dir.",
+    required=False,
+    default=None,
+)
+def committee_lookup(committee_id: str, data: str | None = None):
+    """Search FEC committees data."""
+    data_manager = DataManager(data) if data is not None else DataManager.default()
+    committees_manager = CommitteeManager.from_csv_data_manager(data_manager)
+    committee = committees_manager.get_committee(committee_id)
+    if committee is None:
+        print("No matching committee.")
+    else:
+        print(json.dumps(committee.to_data(), indent=2))
 
 
 @fec.group()
