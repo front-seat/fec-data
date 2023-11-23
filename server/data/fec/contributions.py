@@ -8,7 +8,6 @@ https://www.fec.gov/data/browse-data/?tab=bulk-data
 The schema for the individual contribution master file is available at:
 https://www.fec.gov/campaign-finance-data/contributions-individuals-file-description/
 """
-import csv
 import json
 import pathlib
 import typing as t
@@ -394,10 +393,12 @@ class ContributionsManager:
         get_nickname_index: IGetNicknameIndex,
     ) -> "ContributionsManager":
         """Create a contributions manager from a FEC individual contributions file."""
-        reader = csv.reader(io, delimiter="|")
+        # Turns out this is not simply a CSV with a pipe delimiter. I think it comes
+        # down to escaping quotes, but I'm not sure. So we'll just split on pipes.
+        rows = (row.strip().split("|") for row in io)
         contributions = (
             contribution
-            for row in reader
+            for row in rows
             if (contribution := Contribution.from_contribution_row(row)) is not None
         )
         return cls(

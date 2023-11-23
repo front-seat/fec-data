@@ -186,7 +186,7 @@ class NicknamesManager:
     @classmethod
     def from_data_manager(cls, data_manager: DataManager) -> "NicknamesManager":
         """Create a manager from a data manager."""
-        return cls.from_path(data_manager.path / "names" / "nicknames.json")
+        return cls.from_path(data_manager.path / "names" / "nicknames.jsonl")
 
     def to_data_lines(self) -> t.Iterable[list[str]]:
         """Convert to a json-serializable object."""
@@ -206,7 +206,7 @@ class NicknamesManager:
 
     def to_jsonl_data_manager(self, data_manager: DataManager) -> None:
         """Write to a json file."""
-        self.to_jsonl_path(data_manager.path / "names" / "nicknames.json")
+        self.to_jsonl_path(data_manager.path / "names" / "nicknames.jsonl")
 
     def _index_names(self) -> None:
         """Index the merged names."""

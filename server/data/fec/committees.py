@@ -200,7 +200,7 @@ class CommitteeManager:
         cls, data_manager: "DataManager", year: int = 2020
     ) -> "CommitteeManager":
         """Create a committee manager from a data manager."""
-        return cls.from_csv_path(data_manager.path / "fec" / f"committees-{year}.csv")
+        return cls.from_csv_path(data_manager.path / "fec" / f"committees-{year}.txt")
 
     @classmethod
     def from_jsonl_io(cls, io: t.TextIO) -> "CommitteeManager":
