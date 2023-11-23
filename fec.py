@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 # ruff: noqa: E501
 
+import json
+
 import click
 
-from server.data.fec.contributions import ContributionsManager
+from server.data.fec.contributions import (
+    ContributionsManager,
+    ContributionSummariesManager,
+    FuzzyIdentifier,
+)
 from server.data.manager import DataManager
-from server.data.names.nicknames import MessyNicknamesManager
+from server.data.names.nicknames import MessyNicknamesManager, NicknamesManager
 
 
 @click.group()
@@ -59,9 +65,29 @@ def summarize(data: str | None = None):
 
 
 @contributions.command()
-def search():
+@click.argument("first_name")
+@click.argument("last_name")
+@click.argument("zip_code")
+@click.option(
+    "--data",
+    type=click.Path(exists=True),
+    help="Path to data dir.",
+    required=False,
+    default=None,
+)
+def search(first_name: str, last_name: str, zip_code: str, data: str | None = None):
     """Search summarized FEC contributions data."""
-    pass
+    data_manager = DataManager(data) if data is not None else DataManager.default()
+    nicknames_manager = NicknamesManager.from_data_manager(data_manager)
+    fuzzy_id = FuzzyIdentifier(
+        last_name, first_name, zip_code, get_nickname_index=nicknames_manager
+    ).fuzzy_id
+    summaries_manager = ContributionSummariesManager.from_data_manager(data_manager)
+    summary = summaries_manager.get_summary(fuzzy_id)
+    if summary is None:
+        print("No matching summary.")
+    else:
+        print(json.dumps(summary.to_data(), indent=2))
 
 
 if __name__ == "__main__":

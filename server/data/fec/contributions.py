@@ -105,7 +105,7 @@ class FuzzyIdentifier:
 
     def _make_fuzzy_id(self) -> str:
         """Make the fuzzy ID."""
-        return f"{self.last_name}-{self._first_nickname}-{self.zip_code}".upper()
+        return f"{self.last_name}-{self._first_nickname}-{self.zip_code[:5]}".upper()
 
     def _make_fuzzy_id_if_needed(self) -> None:
         if self._fuzzy_id is None:
@@ -329,7 +329,7 @@ class ContributionSummary:
             zip_code=v.get_str(data, "zip_code"),
             total=v.get_convert_decimal(data, "total"),
             by_party={
-                party: v.validate_convert_decimal(amount)
+                (None if party == "null" else party): v.validate_convert_decimal(amount)
                 for party, amount in by_party_data.items()
             },
             by_committee={
@@ -345,7 +345,10 @@ class ContributionSummary:
             "name": self.name,
             "zip_code": self.zip_code,
             "total": str(self.total),
-            "by_party": {party: str(amount) for party, amount in self.by_party.items()},
+            "by_party": {
+                party if party else "null": str(amount)
+                for party, amount in self.by_party.items()
+            },
             "by_committee": {
                 committee: str(amount)
                 for committee, amount in self.by_committee.items()
