@@ -404,3 +404,126 @@ class ContributionsManagerTestCase(unittest.TestCase):
         )
         summaries_manager = manager.contribution_summaries_manager
         self.assertEqual(len(summaries_manager.contribution_summaries), 1)
+
+
+class ContributionSummariesManagerTestCase(unittest.TestCase):
+    def setUp(self):
+        self.summary_1 = cont.ContributionSummary.new(
+            "SMITH-JOHN-98101",
+            cont.Contribution(
+                id="12345",
+                committee_id="C12345",
+                name="Smith, John",
+                city="Seattle",
+                state="WA",
+                zip_code="98101",
+                amount=Decimal(10),
+            ),
+            get_committee=MockGetCommittee(
+                [
+                    Committee(
+                        id="C12345",
+                        name="Barney for America",
+                        party=Party.DEMOCRAT,
+                        candidate_id="CAN12345",
+                    )
+                ]
+            ),
+        )
+        self.summary_1.add(
+            cont.Contribution(
+                id="12346",
+                committee_id="C67890",
+                name="Smith, John",
+                city="Seattle",
+                state="WA",
+                zip_code="98101",
+                amount=Decimal(20),
+            ),
+            get_committee=MockGetCommittee(
+                [
+                    Committee(
+                        id="C67890",
+                        name="Donald for Duck",
+                        party=Party.DEMOCRAT,
+                        candidate_id="CAN67890",
+                    )
+                ]
+            ),
+        )
+        self.summary_2 = cont.ContributionSummary.new(
+            "PECK-1-98101",
+            cont.Contribution(
+                id="12347",
+                committee_id="CABCDE",
+                name="Peck, Dave",
+                city="Seattle",
+                state="WA",
+                zip_code="98101",
+                amount=Decimal(50),
+            ),
+            get_committee=MockGetCommittee(
+                [
+                    Committee(
+                        id="CABCDE",
+                        name="Jupiter for Pluto",
+                        party=Party.GREEN,
+                        candidate_id="CANABCDE",
+                    )
+                ]
+            ),
+        )
+        self.summaries = [self.summary_1, self.summary_2]
+        self.indexed_summaries = {
+            "SMITH-JOHN-98101": self.summary_1,
+            "PECK-1-98101": self.summary_2,
+        }
+
+    def test_contribution_summaries(self):
+        manager = cont.ContributionSummariesManager(self.indexed_summaries)
+        self.assertEqual(len(manager.contribution_summaries), 2)
+        self.assertEqual(manager.contribution_summaries["SMITH-JOHN-98101"].total, 30)
+        self.assertEqual(manager.contribution_summaries["PECK-1-98101"].total, 50)
+
+    def test_from_summaries(self):
+        manager = cont.ContributionSummariesManager.from_summaries(self.summaries)
+        self.assertEqual(len(manager.contribution_summaries), 2)
+
+    def test_from_jsonl_io(self):
+        json_lines = """\
+{"fuzzy_id": "SMITH-JOHN-98101", "name": "Smith, John", "zip_code": "98101", "total": "30", "by_party": {"DEMOCRAT": "30"}, "by_committee": {"C12345": "30"}}
+{"fuzzy_id": "PECK-1-98101", "name": "Peck, Dave", "zip_code": "98101", "total": "50", "by_party": {"GREEN": "50"}, "by_committee": {"CABCDE": "50"}}
+"""  # noqa: E501
+        jsonl_io = io.StringIO(json_lines)
+        manager = cont.ContributionSummariesManager.from_jsonl_io(jsonl_io)
+        self.assertEqual(len(manager.contribution_summaries), 2)
+        self.assertEqual(manager.contribution_summaries["SMITH-JOHN-98101"].total, 30)
+        self.assertEqual(manager.contribution_summaries["PECK-1-98101"].total, 50)
+
+    def test_to_data_lines(self):
+        self.manager = cont.ContributionSummariesManager(self.indexed_summaries)
+        data_lines = list(self.manager.to_data_lines())
+        self.assertEqual(len(data_lines), 2)
+
+    def test_to_jsonl_io(self):
+        self.manager = cont.ContributionSummariesManager(self.indexed_summaries)
+        jsonl_io = io.StringIO()
+        self.manager.to_jsonl_io(jsonl_io)
+        jsonl_io.seek(0)
+        json_lines = jsonl_io.read()
+        self.assertEqual(len(json_lines.split("\n")), 3)
+
+    def test_get_summary(self):
+        self.manager = cont.ContributionSummariesManager(self.indexed_summaries)
+        summary = self.manager.get_summary("SMITH-JOHN-98101")
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.assertEqual(summary.total, 30)
+        self.assertEqual(summary.by_party.get(Party.DEMOCRAT), 30)
+        self.assertEqual(summary.by_committee.get("C12345"), 10)
+        self.assertEqual(summary.by_committee.get("C67890"), 20)
+
+    def test_get_summary_none(self):
+        self.manager = cont.ContributionSummariesManager(self.indexed_summaries)
+        summary = self.manager.get_summary("SMITH-JOHN-98102")
+        self.assertIsNone(summary)

@@ -495,6 +495,11 @@ class ContributionSummariesManager:
         self._contribution_summaries = dict(contribution_summaries)
 
     @classmethod
+    def from_summaries(cls, contribution_summaries: t.Iterable[ContributionSummary]):
+        """Create a contribution summaries manager from summaries."""
+        return cls({summary.fuzzy_id: summary for summary in contribution_summaries})
+
+    @classmethod
     def from_jsonl_io(cls, io: t.TextIO) -> "ContributionSummariesManager":
         """
         Read from a json lines file and create a manager.
@@ -502,7 +507,8 @@ class ContributionSummariesManager:
         The file contains a single ContributionSummary record on each line.
         The `fuzzy_id` fields must be unique across the entire dataset.
         """
-        summaries = (json.loads(line) for line in io)
+        summaries_data = (json.loads(line) for line in io)
+        summaries = (ContributionSummary.from_data(data) for data in summaries_data)
         return cls({summary.fuzzy_id: summary for summary in summaries})
 
     @classmethod
