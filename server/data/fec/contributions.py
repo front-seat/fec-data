@@ -376,6 +376,7 @@ class ContributionsManager:
     def __init__(
         self,
         contributions: t.Iterable[Contribution],
+        *,
         get_committee: IGetCommittee,
         get_nickname_index: IGetNicknameIndex,
     ) -> None:
@@ -388,6 +389,7 @@ class ContributionsManager:
     def from_csv_io(
         cls,
         io: t.TextIO,
+        *,
         get_committee: IGetCommittee,
         get_nickname_index: IGetNicknameIndex,
     ) -> "ContributionsManager":
@@ -398,19 +400,28 @@ class ContributionsManager:
             for row in reader
             if (contribution := Contribution.from_contribution_row(row)) is not None
         )
-        return cls(contributions, get_committee, get_nickname_index)
+        return cls(
+            contributions,
+            get_committee=get_committee,
+            get_nickname_index=get_nickname_index,
+        )
 
     @classmethod
     def from_path(
         cls,
         path: str | pathlib.Path,
+        *,
         get_committee: IGetCommittee,
         get_nickname_index: IGetNicknameIndex,
     ) -> "ContributionsManager":
         """Create a contributions manager from a path."""
         path = v.validate_extant_file(pathlib.Path(path))
         with path.open("rt") as input_file:
-            return cls.from_csv_io(input_file, get_committee, get_nickname_index)
+            return cls.from_csv_io(
+                input_file,
+                get_committee=get_committee,
+                get_nickname_index=get_nickname_index,
+            )
 
     @classmethod
     def from_data_manager(

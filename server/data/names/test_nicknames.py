@@ -141,7 +141,7 @@ class NicknamesManagerTestCase(unittest.TestCase):
             ],
         )
 
-    def test_name_to_idnex(self) -> None:
+    def test_name_to_index(self) -> None:
         manager = n.NicknamesManager(
             [
                 frozenset(["A", "B"]),
