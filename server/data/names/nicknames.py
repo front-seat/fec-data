@@ -45,7 +45,10 @@ class MessyNicknamesManager:
         for line in io:
             # Remove all commas, slashes, parens
             line = (
-                line.replace(",", "").replace("/", "").replace("(", "").replace(")", "")
+                line.replace(",", " ")
+                .replace("/", "")
+                .replace("(", "")
+                .replace(")", "")
             )
             # Break the line into a list of names -- split on any
             # arbitrary number of spaces
