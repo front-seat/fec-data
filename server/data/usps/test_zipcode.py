@@ -19,7 +19,7 @@ PHYSICAL ZIP,PHYSICAL CITY,PHYSICAL STATE
 class ZipCodeManagerTestCase(TestCase):
     def setUp(self):
         self.data = io.StringIO(FAKE_CSV_DATA)
-        self.zip_code_manager = z.ZipCodeManager(self.data)
+        self.zip_code_manager = z.ZipCodeManager.from_csv_io(self.data)
         self.new_york = z.CityState("NEW YORK", "NY")
         self.seattle = z.CityState("SEATTLE", "WA")
 
@@ -35,3 +35,17 @@ class ZipCodeManagerTestCase(TestCase):
         self.assertEqual(len(self.zip_code_manager.zip5_to_city), 6)
         self.assertEqual(self.zip_code_manager.zip5_to_city["12345"], self.new_york)
         self.assertEqual(self.zip_code_manager.zip5_to_city["98101"], self.seattle)
+
+    def test_get_zip_codes(self):
+        self.assertEqual(len(self.zip_code_manager.get_zip_codes(self.new_york)), 1)
+        self.assertEqual(len(self.zip_code_manager.get_zip_codes(self.seattle)), 5)
+        self.assertEqual(len(self.zip_code_manager.get_zip_codes("seattle")), 5)
+        self.assertEqual(len(self.zip_code_manager.get_zip_codes("nowhere")), 0)
+
+    def test_get_city_state(self):
+        self.assertEqual(self.zip_code_manager.get_city_state("12345"), self.new_york)
+        self.assertEqual(self.zip_code_manager.get_city_state("98101"), self.seattle)
+
+    def test_get_city_state_not_found(self):
+        self.assertIsNone(self.zip_code_manager.get_city_state("00000"))
+        self.assertIsNone(self.zip_code_manager.get_city_state("99999"))

@@ -3,14 +3,11 @@ import pathlib
 import typing as t
 from dataclasses import dataclass
 
-from server.data import DataManager
+from server.data.manager import DataManager
 from server.utils.validations import validate_extant_file
 
-
-@dataclass(frozen=True)
-class CityState:
-    city: str
-    state: str
+from .city_state import CityState
+from .metros import MajorMetros
 
 
 @dataclass(frozen=True)
@@ -31,33 +28,36 @@ class ZipCodeManager:
     _city_to_zip_codes: dict[CityState, set[ZipCode]] | None
     _zip5_to_city: dict[str, CityState] | None
 
-    def __init__(self, data: t.TextIO) -> None:
-        self._load_zip_codes(data)
+    def __init__(self, zip_codes: t.Sequence[ZipCode]) -> None:
+        self._zip_codes = list(zip_codes)
         self._city_to_zip_codes = None
         self._zip5_to_city = None
+
+    @classmethod
+    def from_csv_io(cls, io: t.TextIO) -> "ZipCodeManager":
+        """Return a ZipCodeManager with the given io stream."""
+        zip_codes = []
+        reader = csv.DictReader(io)
+        for row in reader:
+            zip_code = ZipCode(
+                zip5=row["PHYSICAL ZIP"],
+                city=row["PHYSICAL CITY"].upper().strip(),
+                state=row["PHYSICAL STATE"].upper().strip(),
+            )
+            zip_codes.append(zip_code)
+        return cls(zip_codes)
 
     @classmethod
     def from_path(cls, path: str | pathlib.Path) -> "ZipCodeManager":
         """Return a ZipCodeManager with the given path."""
         path = validate_extant_file(pathlib.Path(path))
         with open(path) as f:
-            return cls(f)
+            return cls.from_csv_io(f)
 
     @classmethod
     def from_data_manager(cls, data_manager: DataManager) -> "ZipCodeManager":
         """Return a ZipCodeManager with the same path as the given DataManager."""
         return cls.from_path(data_manager.path / "usps" / "unique-zips.csv")
-
-    def _load_zip_codes(self, data: t.TextIO) -> None:
-        self._zip_codes = []
-        reader = csv.DictReader(data)
-        for row in reader:
-            zip_code = ZipCode(
-                zip5=row["PHYSICAL ZIP"],
-                city=row["PHYSICAL CITY"],
-                state=row["PHYSICAL STATE"],
-            )
-            self._zip_codes.append(zip_code)
 
     def _index_cities(self) -> None:
         assert self._city_to_zip_codes is None
@@ -83,12 +83,12 @@ class ZipCodeManager:
             self._index_zip5s()
 
     @property
-    def zip_codes(self) -> list[ZipCode]:
+    def zip_codes(self) -> t.Sequence[ZipCode]:
         """Return a list of all unique ZIP codes."""
         return self._zip_codes
 
     @property
-    def city_to_zip_codes(self) -> dict[CityState, set[ZipCode]]:
+    def city_to_zip_codes(self) -> t.Mapping[CityState, set[ZipCode]]:
         """
         Return a dict mapping each city to a set of all unique ZIP
         codes in that city.
@@ -98,8 +98,20 @@ class ZipCodeManager:
         return self._city_to_zip_codes
 
     @property
-    def zip5_to_city(self) -> dict[str, CityState]:
+    def zip5_to_city(self) -> t.Mapping[str, CityState]:
         """Return a dict mapping each ZIP5 to the city and state it belongs to."""
         self._index_zip5s_if_needed()
         assert self._zip5_to_city is not None
         return self._zip5_to_city
+
+    def get_zip_codes(self, city: str | CityState | None) -> set[ZipCode]:
+        """Return a set of all unique ZIP codes in the given city."""
+        if isinstance(city, str):
+            city = MajorMetros.for_city(city)
+        if city is None:
+            return set()
+        return self.city_to_zip_codes.get(city, set())
+
+    def get_city_state(self, zip5: str) -> CityState | None:
+        """Return the city and state for the given ZIP5."""
+        return self.zip5_to_city.get(zip5)
