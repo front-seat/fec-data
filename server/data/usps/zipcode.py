@@ -25,13 +25,13 @@ class ZipCodeManager:
     """Offers methods for managing the raw USPS-supplied unique ZIP code data csv."""
 
     _zip_codes: list[ZipCode]
-    _city_to_zip_codes: dict[CityState, set[ZipCode]] | None
-    _zip5_to_city: dict[str, CityState] | None
+    _city_to_zip_codes: dict[CityState, frozenset[ZipCode]] | None
+    _zip5_to_cities: dict[str, frozenset[CityState]] | None
 
     def __init__(self, zip_codes: t.Sequence[ZipCode]) -> None:
         self._zip_codes = list(zip_codes)
         self._city_to_zip_codes = None
-        self._zip5_to_city = None
+        self._zip5_to_cities = None
 
     @classmethod
     def from_csv_io(cls, io: t.TextIO) -> "ZipCodeManager":
@@ -57,29 +57,34 @@ class ZipCodeManager:
     @classmethod
     def from_data_manager(cls, data_manager: DataManager) -> "ZipCodeManager":
         """Return a ZipCodeManager with the same path as the given DataManager."""
-        return cls.from_path(data_manager.path / "usps" / "unique-zips.csv")
+        return cls.from_path(data_manager.path / "usps" / "zips.csv")
 
     def _index_cities(self) -> None:
         assert self._city_to_zip_codes is None
-        self._city_to_zip_codes = {}
+        unfrozen_city_to_zip_codes: dict[CityState, set[ZipCode]] = {}
         for zip_code in self.zip_codes:
-            self._city_to_zip_codes.setdefault(zip_code.as_cs(), set()).add(zip_code)
+            unfrozen_city_to_zip_codes.setdefault(zip_code.as_cs(), set()).add(zip_code)
+        self._city_to_zip_codes = {
+            k: frozenset(v) for k, v in unfrozen_city_to_zip_codes.items()
+        }
 
     def _index_cities_if_needed(self) -> None:
         if self._city_to_zip_codes is None:
             self._index_cities()
 
     def _index_zip5s(self) -> None:
-        assert self._zip5_to_city is None
-        self._zip5_to_city = {}
+        assert self._zip5_to_cities is None
+        unfrozen_zip5_to_cities: dict[str, set[CityState]] = {}
         for zip_code in self.zip_codes:
-            if zip_code.zip5 not in self._zip5_to_city:
-                self._zip5_to_city[zip_code.zip5] = zip_code.as_cs()
-            else:
-                assert self._zip5_to_city[zip_code.zip5] == zip_code.as_cs()
+            unfrozen_zip5_to_cities.setdefault(zip_code.zip5, set()).add(
+                zip_code.as_cs()
+            )
+        self._zip5_to_cities = {
+            k: frozenset(v) for k, v in unfrozen_zip5_to_cities.items()
+        }
 
     def _index_zip5s_if_needed(self) -> None:
-        if self._zip5_to_city is None:
+        if self._zip5_to_cities is None:
             self._index_zip5s()
 
     @property
@@ -88,7 +93,7 @@ class ZipCodeManager:
         return self._zip_codes
 
     @property
-    def city_to_zip_codes(self) -> t.Mapping[CityState, set[ZipCode]]:
+    def city_to_zip_codes(self) -> t.Mapping[CityState, frozenset[ZipCode]]:
         """
         Return a dict mapping each city to a set of all unique ZIP
         codes in that city.
@@ -98,20 +103,20 @@ class ZipCodeManager:
         return self._city_to_zip_codes
 
     @property
-    def zip5_to_city(self) -> t.Mapping[str, CityState]:
+    def zip5_to_cities(self) -> t.Mapping[str, frozenset[CityState]]:
         """Return a dict mapping each ZIP5 to the city and state it belongs to."""
         self._index_zip5s_if_needed()
-        assert self._zip5_to_city is not None
-        return self._zip5_to_city
+        assert self._zip5_to_cities is not None
+        return {k: frozenset(v) for k, v in self._zip5_to_cities.items()}
 
-    def get_zip_codes(self, city: str | CityState | None) -> set[ZipCode]:
+    def get_zip_codes(self, city: str | CityState | None) -> frozenset[ZipCode]:
         """Return a set of all unique ZIP codes in the given city."""
         if isinstance(city, str):
             city = MajorMetros.for_city(city)
         if city is None:
-            return set()
-        return self.city_to_zip_codes.get(city, set())
+            return frozenset()
+        return self.city_to_zip_codes.get(city, frozenset())
 
-    def get_city_state(self, zip5: str) -> CityState | None:
-        """Return the city and state for the given ZIP5."""
-        return self.zip5_to_city.get(zip5)
+    def get_city_states(self, zip5: str) -> frozenset[CityState]:
+        """Return all cities and states for the given ZIP5."""
+        return self.zip5_to_cities.get(zip5, frozenset())
