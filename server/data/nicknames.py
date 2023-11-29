@@ -15,8 +15,8 @@ def split_name(name: str) -> tuple[str, str]:
     if "," not in name:
         raise ValueError("Name is not comma-separated")
 
-    last, first_more = name.split(",", 1)
-    first, *more = first_more.split(" ")
+    last, first_more = name.split(",")
+    first, *more = first_more.strip().split(" ")
     return last.strip().upper(), first.strip().upper()
 
 

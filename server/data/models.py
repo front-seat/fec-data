@@ -1,3 +1,4 @@
+import csv
 import pathlib
 import typing as t
 from decimal import Decimal
@@ -72,7 +73,7 @@ class ZipCode(BaseModel):
         given city and state.
         """
         return sa.select(cls).where(
-            sa.and_(cls.city == city.upper(), cls.state == state.upper())
+            cls.city == city.upper(), cls.state == state.upper()
         )
 
     @classmethod
@@ -101,17 +102,40 @@ class ZipCode(BaseModel):
         return session.execute(statement).scalars()
 
     @classmethod
-    def insert_stmt(cls, zip_code: str, city: str, state: str):
-        """Return an insert statement that inserts the given zip code."""
-        return sa.insert(cls).values(
-            zip5=zip_code[:5], city=city.upper(), state=state.upper()
+    def from_zip_code_row(cls, row: dict[str, str]) -> t.Self:
+        """Create a zip code from a row of the zip code file."""
+        return cls(
+            zip5=row["PHYSICAL ZIP"][:5],
+            city=row["PHYSICAL CITY"].strip().upper(),
+            state=row["PHYSICAL STATE"].strip().upper(),
         )
 
     @classmethod
-    def insert(cls, session: sao.Session, zip_code: str, city: str, state: str) -> None:
-        """Insert the given zip code."""
-        statement = cls.insert_stmt(zip_code, city, state)
-        session.execute(statement)
+    def from_csv_io(
+        cls,
+        text_io: t.TextIO,
+    ) -> t.Iterable[t.Self]:
+        """Create zip codes from a zip code file."""
+        dict_reader = csv.DictReader(text_io)
+        return (cls.from_zip_code_row(row) for row in dict_reader)
+
+    @classmethod
+    def from_path(
+        cls,
+        path: pathlib.Path,
+    ) -> t.Iterable[t.Self]:
+        """Create zip codes from a zip code file on disk."""
+        path = validate_extant_file(path)
+        with path.open() as file:
+            yield from cls.from_csv_io(file)
+
+    @classmethod
+    def from_data_manager(
+        cls,
+        data_manager: DataManager,
+    ) -> t.Iterable[t.Self]:
+        """Create zip codes from a zip code file."""
+        return cls.from_path(data_manager.path / "usps" / "zips.csv")
 
 
 class Committee(BaseModel):
@@ -208,7 +232,6 @@ class Contribution(BaseModel):
     amount_cents: sao.Mapped[int] = sao.mapped_column(sa.Integer, nullable=False)
 
     # We need to create indexes on the columns we'll be querying on.
-
     __table_args__ = (
         sa.Index("last_name_zip5_first_name", last_name, zip5, first_name),
         sa.Index("last_name_city_state_first_name", last_name, city, state, first_name),
@@ -243,6 +266,7 @@ class Contribution(BaseModel):
     ) -> t.Iterable[t.Self]:
         """Return a query for contributions matching the given criteria."""
         statement = cls.for_last_zip_firsts_stmt(last_name, zip_code, first_names)
+        print(str(statement))
         return session.execute(statement).scalars()
 
     @classmethod
@@ -279,6 +303,7 @@ class Contribution(BaseModel):
         statement = cls.for_last_city_state_firsts_stmt(
             last_name, city, state, first_names
         )
+        print(str(statement))
         return session.execute(statement).scalars()
 
     @classmethod
@@ -357,29 +382,29 @@ class Contribution(BaseModel):
         """Create a contributions manager from a FEC individual contributions file."""
         return cls.from_path(data_manager.path / "fec" / f"individual-{year}.txt")
 
+    def to_data(self) -> dict[str, str | int]:
+        """Return a dictionary representation of this contribution."""
+        return {
+            "id": self.id,
+            "committee_id": self.committee_id,
+            "committee_name": self.committee.name,
+            "committee_party": self.committee.party,
+            "last_name": self.last_name,
+            "first_name": self.first_name,
+            "city": self.city,
+            "state": self.state,
+            "zip5": self.zip5,
+            "zip_code": self.zip_code,
+            "amount_cents": self.amount_cents,
+            "amount_fmt": f"${self.amount_cents / 100:,.2f}",
+        }
 
-def engine_for_data_manager(data_manager: DataManager) -> sa.Engine:
+
+def get_engine(data_manager: DataManager, state: str) -> sa.Engine:
     """Return an engine for the given data manager."""
     return sa.create_engine(
-        f"sqlite:///{data_manager.path / 'fec.db'}",
-        # connect_args={"check_same_thread": False},
-        # execution_options={"sqlite_synchronous": False, "sqlite_journal_mode": "WAL"},
+        f"sqlite:///{data_manager.path / 'db' / f'{state}.db'}",
     )
-
-
-def session_for_data_manager(data_manager: DataManager) -> sao.Session:
-    """Return a session for the given data manager."""
-    return sao.Session(bind=engine_for_data_manager(data_manager))
-
-
-def default_engine() -> sa.Engine:
-    """Return an engine for the default data manager."""
-    return engine_for_data_manager(DataManager.default())
-
-
-def default_session() -> sao.Session:
-    """Return a session for the default data manager."""
-    return session_for_data_manager(DataManager.default())
 
 
 def create_db_tables(engine: sa.Engine) -> None:
