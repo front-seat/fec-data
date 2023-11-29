@@ -34,7 +34,10 @@ class ContributionSummary:
 
     def committees(self) -> t.Iterable[Committee]:
         """Return the committees that received contributions."""
-        return {contribution.committee for contribution in self._contributions}
+        return sorted(
+            {contribution.committee for contribution in self._contributions},
+            key=lambda c: c.name,
+        )
 
     def committee_total_cents(self, committee: Committee) -> int:
         """Return the total amount of contributions for a committee."""
@@ -54,7 +57,9 @@ class ContributionSummary:
 
     def parties(self) -> t.Iterable[str]:
         """Return the parties that received contributions."""
-        return {contribution.committee.party for contribution in self._contributions}
+        return sorted(
+            {contribution.committee.party for contribution in self._contributions}
+        )
 
     def party_total_cents(self, party: str) -> int:
         """Return the total amount of contributions for a party."""
