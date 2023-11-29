@@ -167,6 +167,10 @@ class ContributionSummaryManager:
     ) -> ContributionSummary | None:
         """Return the largest contribution summary for a contact."""
         summaries = list(self._summaries_for_contact(contact))
+        if contact.zip5:
+            contact_no_zip = contact.without_zip()
+            more_summaries = list(self._summaries_for_contact(contact_no_zip))
+            summaries.extend(more_summaries)
         if not summaries:
             return None
         return max(summaries, key=lambda s: s.total_cents)

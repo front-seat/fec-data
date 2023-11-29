@@ -210,9 +210,9 @@ def search(
     seen_contacts = set()
 
     for contact in contact_provider.get_contacts():
-        if contact in seen_contacts:
+        if contact.without_zip() in seen_contacts:
             continue
-        seen_contacts.add(contact)
+        seen_contacts.add(contact.without_zip())
         manager = state_to_manager.get(contact.state)
         if manager is None:
             manager = ContributionSummaryManager(

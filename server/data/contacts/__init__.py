@@ -31,6 +31,10 @@ class Contact:
             data["zip_code"] = self.zip_code
         return data
 
+    def without_zip(self) -> "Contact":
+        """Return a copy of the contact without the zip code."""
+        return Contact(self.first_name, self.last_name, self.city, self.state, None)
+
 
 class IContactProvider(t.Protocol):
     """Defines a simple protocol for getting critical contact information."""
