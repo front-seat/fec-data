@@ -7,8 +7,8 @@ from server.data.nicknames import NicknamesManager
 from server.data.summaries import ContributionSummaryManager
 
 
-@get("/", sync_to_thread=True)
-def index() -> dict:
+@get("/")
+async def index() -> dict:
     """Return the index."""
     return {"message": "Hello, world!"}
 
