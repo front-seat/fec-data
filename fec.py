@@ -18,6 +18,7 @@ from server.data.models import (
     get_engine,
 )
 from server.data.nicknames import NicknamesManager
+from server.data.summaries import ContributionSummaryManager
 
 
 @click.group()
@@ -205,40 +206,22 @@ def search(
             "You must provide a contact dir, zip file, or explicit name & zip."
         )
 
-    state_to_engine = {}
+    state_to_manager = {}
 
     for contact in contact_provider.get_contacts():
-        engine = state_to_engine.get(contact.state)
-        if engine is None:
-            engine = get_engine(data_manager, contact.state)
-            state_to_engine[contact.state] = engine
-        related_name_sets = list(
-            nicknames_manager.get_related_names(contact.first_name)
-        )
-        # For now, just use the first related name set.
-        related_name_set = (
-            related_name_sets[0]
-            if related_name_sets
-            else frozenset([contact.first_name])
-        )
-        with sao.Session(engine) as session, session.begin():
-            if contact.zip5 is None:
-                contributions = Contribution.for_last_city_state_firsts(
-                    session,
-                    contact.last_name,
-                    contact.city,
-                    contact.state,
-                    related_name_set,
-                )
-            else:
-                contributions = Contribution.for_last_zip_firsts(
-                    session, contact.last_name, contact.zip5, related_name_set
-                )
-            result_data = {
-                "contact": contact.to_data(),
-                "contributions": [c.to_data() for c in contributions],
-            }
-        print(json.dumps(result_data))
+        manager = state_to_manager.get(contact.state)
+        if manager is None:
+            manager = ContributionSummaryManager(
+                get_engine(data_manager, contact.state),
+                nicknames_manager,
+            )
+            state_to_manager[contact.state] = manager
+        summary = manager.largest_summary_for_contact(contact)
+        result = {
+            "contact": contact.to_data(),
+            "summary": summary.to_data() if summary else None,
+        }
+        print(json.dumps(result))
 
 
 if __name__ == "__main__":

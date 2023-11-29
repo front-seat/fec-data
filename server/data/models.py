@@ -13,6 +13,7 @@ from server.data.fec_types import (
     Party,
 )
 from server.data.manager import DataManager
+from server.utils.format import fmt_usd
 from server.utils.validations import validate_extant_file
 
 from .nicknames import split_name
@@ -227,7 +228,7 @@ class Contribution(BaseModel):
     committee_id: sao.Mapped[str] = sao.mapped_column(
         sa.String(18), sa.ForeignKey("committees.id"), nullable=False
     )
-    committee: sao.Mapped[Committee] = sao.relationship(Committee)
+    committee: sao.Mapped[Committee] = sao.relationship(Committee, lazy="joined")
     last_name: sao.Mapped[str] = sao.mapped_column(sa.String(64), nullable=False)
     first_name: sao.Mapped[str] = sao.mapped_column(sa.String(64), nullable=False)
     city: sao.Mapped[str] = sao.mapped_column(sa.String(64), nullable=False)
@@ -401,7 +402,7 @@ class Contribution(BaseModel):
             "zip5": self.zip5,
             "zip_code": self.zip_code,
             "amount_cents": self.amount_cents,
-            "amount_fmt": f"${self.amount_cents / 100:,.2f}",
+            "amount_fmt": fmt_usd(self.amount_cents),
         }
 
 

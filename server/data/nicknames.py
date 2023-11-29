@@ -21,7 +21,7 @@ def split_name(name: str) -> tuple[str, str]:
     return last, first
 
 
-class IGetRelatedNames(t.Protocol):
+class INamesProvider(t.Protocol):
     """A protocol for getting related names."""
 
     def get_related_names(self, name: str) -> t.Iterable[frozenset[str]]:
