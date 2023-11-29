@@ -136,7 +136,7 @@ class ContributionSummaryManager:
                 if summary.total_cents > 0:
                     yield summary
 
-    def largest_summary_for_contact(
+    def preferred_summary_for_contact(
         self, contact: Contact
     ) -> ContributionSummary | None:
         """Return the largest contribution summary for a contact."""
