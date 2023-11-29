@@ -32,15 +32,23 @@ class ABBUManagerBase(abc.ABC):
         """Parse an abperson file into a Contact."""
         try:
             plist_data = plistlib.load(abperson)
-            first = plist_data["First"].title()
-            last = plist_data["Last"].title()
+            first_name = plist_data["First"].upper()
+            last_name = plist_data["Last"].upper()
             # use the preferred zip code if it exists
-            zip_code = plist_data["Address"]["values"][0]["ZIP"].replace("-", "")
+            city = plist_data["Address"]["values"][0]["City"].upper()
+            state = plist_data["Address"]["values"][0]["State"].upper()
+            maybe_zip_code = (
+                plist_data["Address"]["values"][0].get("ZIP", "").replace("-", "")
+            )
+            if len(maybe_zip_code) in {5, 9}:  # 5 or 9 digits
+                zip_code = maybe_zip_code
+            else:
+                zip_code = None
         except Exception:
             return None
-        if len(zip_code) not in {5, 9}:
+        if len(state) != 2:
             return None
-        return Contact(first, last, zip_code)
+        return Contact(first_name, last_name, city, state, zip_code)
 
 
 class DirectoryABBUManager(ABBUManagerBase):
