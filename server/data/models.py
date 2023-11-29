@@ -117,7 +117,12 @@ class ZipCode(BaseModel):
     ) -> t.Iterable[t.Self]:
         """Create zip codes from a zip code file."""
         dict_reader = csv.DictReader(text_io)
-        return (cls.from_zip_code_row(row) for row in dict_reader)
+        seen_tuples: set[tuple[str, str, str]] = set()
+        for row in dict_reader:
+            z = cls.from_zip_code_row(row)
+            if (key := (z.zip5, z.city, z.state)) not in seen_tuples:
+                seen_tuples.add(key)
+                yield z
 
     @classmethod
     def from_path(
