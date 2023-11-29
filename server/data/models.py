@@ -271,7 +271,7 @@ class Contribution(BaseModel):
     ) -> t.Iterable[t.Self]:
         """Return a query for contributions matching the given criteria."""
         statement = cls.for_last_zip_firsts_stmt(last_name, zip_code, first_names)
-        print(str(statement))
+        # print(str(statement))
         return session.execute(statement).scalars()
 
     @classmethod
@@ -308,7 +308,7 @@ class Contribution(BaseModel):
         statement = cls.for_last_city_state_firsts_stmt(
             last_name, city, state, first_names
         )
-        print(str(statement))
+        # print(str(statement))
         return session.execute(statement).scalars()
 
     @classmethod

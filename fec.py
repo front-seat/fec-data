@@ -221,7 +221,7 @@ def search(
             if related_name_sets
             else frozenset([contact.first_name])
         )
-        with sao.Session(engine) as session:
+        with sao.Session(engine) as session, session.begin():
             if contact.zip5 is None:
                 contributions = Contribution.for_last_city_state_firsts(
                     session,
