@@ -102,6 +102,27 @@ class ContributionSummary:
             },
         }
 
+    def __str__(self) -> str:
+        """Pretty print a summary."""
+        lines = []
+        lines.append(f"\tTotal: {self.total_fmt}")
+
+        # breakdown by party
+        lines.append("\n\tParties:")
+        for party in self.parties():
+            lines.append(
+                f"\t\t{party}: {self.party_total_fmt(party)} ({self.party_percent(party):.2%})"  # noqa: E501
+            )
+
+        # breakdown by committee
+        lines.append("\n\tCommittees:")
+        for committee in self.committees():
+            lines.append(
+                f"\t\t{committee.name} ({committee.party}): {self.committee_total_fmt(committee)} ({self.committee_percent(committee):.2%})"  # noqa: E501
+            )
+
+        return "\n".join(lines)
+
 
 class ContributionSummaryManager:
     """Tools for building accurate contribution summaries."""

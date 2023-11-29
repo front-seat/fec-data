@@ -1,3 +1,5 @@
+import pathlib
+
 from litestar import Litestar, get
 
 from server.data.contacts import Contact
@@ -8,9 +10,17 @@ from server.data.summaries import ContributionSummaryManager
 
 
 @get("/")
-async def index() -> dict:
+async def frontend_root() -> dict:
     """Return the index."""
-    return {"message": "Hello, world!"}
+    return {"file": "index.html"}
+
+
+@get("/{path:path}")
+async def frontend(path: pathlib.Path) -> dict:
+    """Return the index."""
+    if path.suffix == "":
+        path = path / "index.html"
+    return {"file": str(path)}
 
 
 @get("/summarize", sync_to_thread=True)
@@ -25,4 +35,4 @@ def summarize() -> dict:
     return summary.to_data() if summary else {}
 
 
-app = Litestar([index, summarize])
+app = Litestar([summarize, frontend, frontend_root])

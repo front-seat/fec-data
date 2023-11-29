@@ -207,8 +207,12 @@ def search(
         )
 
     state_to_manager = {}
+    seen_contacts = set()
 
     for contact in contact_provider.get_contacts():
+        if contact in seen_contacts:
+            continue
+        seen_contacts.add(contact)
         manager = state_to_manager.get(contact.state)
         if manager is None:
             manager = ContributionSummaryManager(
@@ -217,11 +221,10 @@ def search(
             )
             state_to_manager[contact.state] = manager
         summary = manager.preferred_summary_for_contact(contact)
-        result = {
-            "contact": contact.to_data(),
-            "summary": summary.to_data() if summary else None,
-        }
-        print(json.dumps(result))
+        if summary is None:
+            continue
+        print(contact.first_name.title(), contact.last_name.title())
+        print(str(summary))
 
 
 if __name__ == "__main__":
