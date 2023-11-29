@@ -12,12 +12,13 @@ def split_name(name: str) -> tuple[str, str]:
     if not name:
         raise ValueError("Name is empty")
 
-    if "," not in name:
-        raise ValueError("Name is not comma-separated")
+    splits = name.split(",")
+    if len(splits) == 1:
+        return splits[0].strip().upper(), ""
 
-    last, first_more = name.split(",")
-    first, *more = first_more.strip().split(" ")
-    return last.strip().upper(), first.strip().upper()
+    last = splits[0].strip().upper()
+    first = splits[1].strip().split(" ")[0].upper()
+    return last, first
 
 
 class NicknamesManager:
