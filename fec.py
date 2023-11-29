@@ -71,14 +71,12 @@ def init(data: str | None = None):
         for committee in Committee.from_data_manager(data_manager):
             session.add(committee)
     print("Adding individual contributions...")
+    batch_size = 1_000
     with session_for_data_manager(data_manager) as session:
-        for contributions in batched(
-            tqdm(
-                Contribution.from_data_manager(data_manager),
-                unit="contribution",
-                total=70_659_611,
-            ),
-            5_000,
+        for contributions in tqdm(
+            batched(Contribution.from_data_manager(data_manager), batch_size),
+            unit="batch",
+            total=70_659_611 // batch_size,
         ):
             with session.begin():
                 session.add_all(contributions)

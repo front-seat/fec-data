@@ -360,7 +360,11 @@ class Contribution(BaseModel):
 
 def engine_for_data_manager(data_manager: DataManager) -> sa.Engine:
     """Return an engine for the given data manager."""
-    return sa.create_engine(f"sqlite:///{data_manager.path / 'fec.db'}")
+    return sa.create_engine(
+        f"sqlite:///{data_manager.path / 'fec.db'}",
+        # connect_args={"check_same_thread": False},
+        # execution_options={"sqlite_synchronous": False, "sqlite_journal_mode": "WAL"},
+    )
 
 
 def session_for_data_manager(data_manager: DataManager) -> sao.Session:
