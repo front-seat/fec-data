@@ -8,6 +8,8 @@ from server.utils.format import fmt_usd
 from .contacts import Contact
 from .models import Committee, Contribution
 from .nicknames import INamesProvider
+from .npa import IAreaCodeProvider
+from .usps import IZipCodeProvider
 
 
 class ContributionSummary:
@@ -34,7 +36,10 @@ class ContributionSummary:
 
     def committees(self) -> t.Iterable[Committee]:
         """Return the committees that received contributions."""
-        return {contribution.committee for contribution in self._contributions}
+        return sorted(
+            {contribution.committee for contribution in self._contributions},
+            key=lambda c: c.name,
+        )
 
     def committee_total_cents(self, committee: Committee) -> int:
         """Return the total amount of contributions for a committee."""
@@ -54,7 +59,9 @@ class ContributionSummary:
 
     def parties(self) -> t.Iterable[str]:
         """Return the parties that received contributions."""
-        return {contribution.committee.party for contribution in self._contributions}
+        return sorted(
+            {contribution.committee.party for contribution in self._contributions}
+        )
 
     def party_total_cents(self, party: str) -> int:
         """Return the total amount of contributions for a party."""
@@ -97,6 +104,66 @@ class ContributionSummary:
             },
         }
 
+    def __str__(self) -> str:
+        """Pretty print a summary."""
+        lines = []
+        lines.append(f"\tTotal: {self.total_fmt}")
+
+        # breakdown by party
+        lines.append("\n\tParties:")
+        for party in self.parties():
+            lines.append(
+                f"\t\t{party}: {self.party_total_fmt(party)} ({self.party_percent(party):.2%})"  # noqa: E501
+            )
+
+        # breakdown by committee
+        lines.append("\n\tCommittees:")
+        for committee in self.committees():
+            lines.append(
+                f"\t\t{committee.name} ({committee.party}): {self.committee_total_fmt(committee)} ({self.committee_percent(committee):.2%})"  # noqa: E501
+            )
+
+        return "\n".join(lines)
+
+
+class AlternativeContactsHelper:
+    """Tools for finding and refining contact details."""
+
+    def __init__(
+        self, zip_code_provider: IZipCodeProvider, area_code_provider: IAreaCodeProvider
+    ):
+        self._zip_code_provider = zip_code_provider
+        self._area_code_provider = area_code_provider
+
+    def get_alternatives(
+        self,
+        contact: Contact,
+    ) -> t.Iterable[Contact]:
+        """Return useful alternative contacts for a given contact."""
+        # If the contact has a city + state, we're done.
+        if contact.has_city_state:
+            yield contact
+            return
+
+        # If the contact has a zip code, but no city + state, then we need to
+        # find the city + state from the zip code.
+        zip_code = contact.zip_code
+        if zip_code is not None:
+            for city, state in self._zip_code_provider.get_city_states(zip_code):
+                yield contact.with_city_state(city, state)
+            return
+
+        # If the contact has a US area code, but no city + state, then we need
+        # to find the city + state from the area code.
+        npa_id = contact.npa_id
+        if npa_id is not None:
+            for city, state in self._area_code_provider.get_city_states(npa_id):
+                yield contact.with_city_state(city, state)
+
+        # It's possible that no searchable alternatives for this contact exist.
+        # So be it.
+        return
+
 
 class ContributionSummaryManager:
     """Tools for building accurate contribution summaries."""
@@ -104,13 +171,19 @@ class ContributionSummaryManager:
     _engine: sa.Engine
     _names_provider: INamesProvider
 
-    def __init__(self, engine: sa.Engine, names_provider: INamesProvider):
+    def __init__(
+        self,
+        engine: sa.Engine,
+        names_provider: INamesProvider,
+    ):
         self._engine = engine
         self._names_provider = names_provider
 
     def _contact_stmt(self, contact: Contact, related_name_set: frozenset[str]):
         """Return a SQL statement that matches a contact."""
         if contact.zip5 is None:
+            assert contact.city
+            assert contact.state
             return Contribution.for_last_city_state_firsts_stmt(
                 contact.last_name,
                 contact.city,
@@ -129,6 +202,9 @@ class ContributionSummaryManager:
         related_name_sets = list(
             self._names_provider.get_related_names(contact.first_name)
         )
+        # No related names? Just use the first name.
+        if not related_name_sets:
+            related_name_sets = [frozenset([contact.first_name])]
         with sao.Session(self._engine) as session:
             for related_name_set in related_name_sets:
                 stmt = self._contact_stmt(contact, related_name_set)
@@ -140,7 +216,13 @@ class ContributionSummaryManager:
         self, contact: Contact
     ) -> ContributionSummary | None:
         """Return the largest contribution summary for a contact."""
-        summaries = list(self._summaries_for_contact(contact))
+        assert contact.has_city_state
+        try_contacts = [contact]
+        if contact.has_zip:
+            try_contacts.append(contact.without_zip())
+        summaries = []
+        for try_contact in try_contacts:
+            summaries.extend(list(self._summaries_for_contact(try_contact)))
         if not summaries:
             return None
         return max(summaries, key=lambda s: s.total_cents)

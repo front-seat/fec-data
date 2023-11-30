@@ -1,4 +1,3 @@
-import csv
 import pathlib
 import typing as t
 from decimal import Decimal
@@ -14,7 +13,7 @@ from server.data.fec_types import (
 )
 from server.data.manager import DataManager
 from server.utils.format import fmt_usd
-from server.utils.validations import validate_extant_file
+from server.utils.validations import is_extant_file, validate_extant_file
 
 from .nicknames import split_name
 
@@ -41,107 +40,6 @@ class BaseModel(sao.DeclarativeBase):
             raise ValueError(f"Model {cls} has no id attribute")
         maybe_result = session.execute(sa.select(sa.func.count(id_attr))).scalar()
         return maybe_result or 0
-
-
-class ZipCode(BaseModel):
-    """
-    A 5-digit zip code matched with its city and state.
-
-    Note that a given zip code may be associated with multiple cities and
-    states, and a given city and state may be associated with multiple zip
-    codes.
-
-    When inserted, cities and states are normalized to uppercase.
-    """
-
-    __tablename__ = "zip_codes"
-
-    id: sao.Mapped[int] = sao.mapped_column(primary_key=True)
-    zip5: sao.Mapped[str] = sao.mapped_column(sa.String(5), nullable=False, index=True)
-    city: sao.Mapped[str] = sao.mapped_column(sa.String(64), nullable=False)
-    state: sao.Mapped[str] = sao.mapped_column(sa.String(2), nullable=False)
-
-    # Define indexes. In particular, (zip5, city state) should be unique.
-    __table_args__ = (
-        sa.Index("zip5_city_state", zip5, city, state, unique=True),
-        sa.Index("city_state", city, state),
-    )
-
-    @classmethod
-    def for_city_and_state_stmt(cls, city: str, state: str):
-        """
-        Return a select statement that returns all ZipCode records for the
-        given city and state.
-        """
-        return sa.select(cls).where(
-            cls.city == city.upper(), cls.state == state.upper()
-        )
-
-    @classmethod
-    def for_city_and_state(
-        cls, session: sao.Session, city: str, state: str
-    ) -> t.Iterable[t.Self]:
-        """
-        Return a query that returns all ZipCode records for the given city and
-        state.
-        """
-        statement = cls.for_city_and_state_stmt(city, state)
-        return session.execute(statement).scalars()
-
-    @classmethod
-    def for_zip_code_stmt(cls, zip_code: str):
-        """
-        Return a select statement that returns all ZipCode records for the
-        given zip code.
-        """
-        return sa.select(cls).where(cls.zip5 == zip_code[:5])
-
-    @classmethod
-    def for_zip_code(cls, session: sao.Session, zip_code: str) -> t.Iterable[t.Self]:
-        """Return a query that returns all ZipCode records for the given zip code."""
-        statement = cls.for_zip_code_stmt(zip_code)
-        return session.execute(statement).scalars()
-
-    @classmethod
-    def from_zip_code_row(cls, row: dict[str, str]) -> t.Self:
-        """Create a zip code from a row of the zip code file."""
-        return cls(
-            zip5=row["PHYSICAL ZIP"][:5],
-            city=row["PHYSICAL CITY"].strip().upper(),
-            state=row["PHYSICAL STATE"].strip().upper(),
-        )
-
-    @classmethod
-    def from_csv_io(
-        cls,
-        text_io: t.TextIO,
-    ) -> t.Iterable[t.Self]:
-        """Create zip codes from a zip code file."""
-        dict_reader = csv.DictReader(text_io)
-        seen_tuples: set[tuple[str, str, str]] = set()
-        for row in dict_reader:
-            z = cls.from_zip_code_row(row)
-            if (key := (z.zip5, z.city, z.state)) not in seen_tuples:
-                seen_tuples.add(key)
-                yield z
-
-    @classmethod
-    def from_path(
-        cls,
-        path: pathlib.Path,
-    ) -> t.Iterable[t.Self]:
-        """Create zip codes from a zip code file on disk."""
-        path = validate_extant_file(path)
-        with path.open() as file:
-            yield from cls.from_csv_io(file)
-
-    @classmethod
-    def from_data_manager(
-        cls,
-        data_manager: DataManager,
-    ) -> t.Iterable[t.Self]:
-        """Create zip codes from a zip code file."""
-        return cls.from_path(data_manager.path / "usps" / "zips.csv")
 
 
 class Committee(BaseModel):
@@ -404,6 +302,18 @@ class Contribution(BaseModel):
             "amount_cents": self.amount_cents,
             "amount_fmt": fmt_usd(self.amount_cents),
         }
+
+
+def is_extant_db(data_manager: DataManager, state: str) -> bool:
+    """Return whether or not a database exists for the given data manager."""
+    path = data_manager.path / "db" / f"{state}.db"
+    return is_extant_file(path)
+
+
+def validate_extant_db(data_manager: DataManager, state: str) -> None:
+    """Validate the existence of a database for the given data manager."""
+    path = data_manager.path / "db" / f"{state}.db"
+    validate_extant_file(path)
 
 
 def get_engine(data_manager: DataManager, state: str) -> sa.Engine:

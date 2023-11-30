@@ -4,6 +4,7 @@ import plistlib
 import typing as t
 import zipfile
 
+from server.data.phone import normalize_e164
 from server.utils.validations import validate_extant_dir, validate_extant_file
 
 from . import Contact
@@ -35,20 +36,29 @@ class ABBUManagerBase(abc.ABC):
             first_name = plist_data["First"].upper()
             last_name = plist_data["Last"].upper()
             # use the preferred zip code if it exists
-            city = plist_data["Address"]["values"][0]["City"].upper()
-            state = plist_data["Address"]["values"][0]["State"].upper()
-            maybe_zip_code = (
-                plist_data["Address"]["values"][0].get("ZIP", "").replace("-", "")
-            )
-            if len(maybe_zip_code) in {5, 9}:  # 5 or 9 digits
-                zip_code = maybe_zip_code
-            else:
+            try:
+                address_0 = plist_data["Address"]["values"][0]
+            except Exception:
+                address_0 = {}
+            city = address_0.get("City", "").upper() or None
+            state = address_0.get("State", "").upper() or None
+            if state and len(state) != 2:
+                state = None
+
+            zip_code = address_0.get("ZIP", "").replace("-", "") or None
+            if zip_code and len(zip_code) not in {5, 9}:
                 zip_code = None
+
+            try:
+                phone = plist_data["Phone"]["values"][0]
+            except Exception:
+                phone = None
+
+            phone = normalize_e164(phone) if phone else None
+
         except Exception:
             return None
-        if len(state) != 2:
-            return None
-        return Contact(first_name, last_name, city, state, zip_code)
+        return Contact(first_name, last_name, city, state, phone, zip_code)
 
 
 class DirectoryABBUManager(ABBUManagerBase):

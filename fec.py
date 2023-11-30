@@ -9,22 +9,82 @@ from tqdm import tqdm
 
 from server.data.contacts import Contact, IContactProvider, SimpleContactProvider
 from server.data.contacts.abbu import DirectoryABBUManager, ZipABBUManager
+from server.data.contacts.google import GoogleContactExportManager
 from server.data.manager import DataManager
 from server.data.models import (
     Committee,
     Contribution,
-    ZipCode,
     create_db_tables,
     get_engine,
 )
 from server.data.nicknames import NicknamesManager
-from server.data.summaries import ContributionSummaryManager
+from server.data.search import ContactContributionSearcher
 
 
 @click.group()
 def fec():
     """Work with FEC data."""
     pass
+
+
+@fec.group()
+def contacts():
+    """Work with contacts data."""
+    pass
+
+
+@contacts.command(name="list")
+@click.option(
+    "-c",
+    "--contact-dir",
+    type=click.Path(exists=True, dir_okay=True, file_okay=False),
+    help="Path to a `.abbu` contacts dir.",
+    required=False,
+    default=None,
+)
+@click.option(
+    "-z",
+    "--contact-zip",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    help="Path to a `.abbu` contacts zip file.",
+    required=False,
+    default=None,
+)
+@click.option(
+    "-g",
+    "--google",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    help="Path to a Google contacts CSV file.",
+    required=False,
+    default=None,
+)
+def list_contacts(
+    contact_dir: str | None = None,
+    contact_zip: str | None = None,
+    google: str | None = None,
+):
+    """List contacts."""
+    contact_provider: IContactProvider | None = None
+
+    if contact_dir is not None:
+        contact_provider = DirectoryABBUManager(contact_dir)
+    elif contact_zip is not None:
+        contact_provider = ZipABBUManager(contact_zip)
+    elif google is not None:
+        contact_provider = GoogleContactExportManager(google)
+
+    if contact_provider is None:
+        raise click.UsageError(
+            "You must provide a contact dir, zip file, or explicit name & zip."
+        )
+
+    seen_contacts = set()
+
+    for contact in contact_provider.get_contacts():
+        if contact.without_zip() in seen_contacts:
+            continue
+        seen_contacts.add(contact.without_zip())
+        print(json.dumps(contact.to_data()))
 
 
 @fec.group()
@@ -85,7 +145,6 @@ def init(data: str | None = None):
             create_db_tables(engine)
             with sao.Session(engine) as session, session.begin():
                 session.add_all(Committee.from_data_manager(data_manager))
-                session.add_all(ZipCode.from_data_manager(data_manager))
 
         # Add the batch to the database.
         with sao.Session(engine) as session, session.begin():
@@ -175,6 +234,14 @@ def contributions():
     required=False,
     default=None,
 )
+@click.option(
+    "-g",
+    "--google",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    help="Path to a Google contacts CSV file.",
+    required=False,
+    default=None,
+)
 def search(
     first_name: str | None = None,
     last_name: str | None = None,
@@ -184,10 +251,11 @@ def search(
     data: str | None = None,
     contact_dir: str | None = None,
     contact_zip: str | None = None,
+    google: str | None = None,
 ):
     """Search summarized FEC contributions data."""
     data_manager = DataManager(data) if data is not None else DataManager.default()
-    nicknames_manager = NicknamesManager.from_data_manager(data_manager)
+    searcher = ContactContributionSearcher(data_manager)
 
     contact_provider: IContactProvider | None = None
 
@@ -195,9 +263,16 @@ def search(
         contact_provider = DirectoryABBUManager(contact_dir)
     elif contact_zip is not None:
         contact_provider = ZipABBUManager(contact_zip)
+    elif google is not None:
+        contact_provider = GoogleContactExportManager(google)
     elif first_name and last_name and city and state:
         singleton = Contact(
-            first_name.upper(), last_name.upper(), city.upper(), state.upper(), zip_code
+            first_name.upper(),
+            last_name.upper(),
+            city.upper(),
+            state.upper(),
+            None,
+            zip_code,
         )
         contact_provider = SimpleContactProvider([singleton])
 
@@ -206,22 +281,13 @@ def search(
             "You must provide a contact dir, zip file, or explicit name & zip."
         )
 
-    state_to_manager = {}
-
-    for contact in contact_provider.get_contacts():
-        manager = state_to_manager.get(contact.state)
-        if manager is None:
-            manager = ContributionSummaryManager(
-                get_engine(data_manager, contact.state),
-                nicknames_manager,
-            )
-            state_to_manager[contact.state] = manager
-        summary = manager.preferred_summary_for_contact(contact)
-        result = {
-            "contact": contact.to_data(),
-            "summary": summary.to_data() if summary else None,
-        }
-        print(json.dumps(result))
+    for contact, summary in searcher.search_and_summarize_contacts(contact_provider):
+        assert contact.city
+        assert contact.state
+        print(
+            f"{contact.first_name.title()} {contact.last_name.title()} ({contact.city.title()}, {contact.state})"
+        )
+        print(str(summary))
 
 
 if __name__ == "__main__":
