@@ -202,6 +202,9 @@ class ContributionSummaryManager:
         related_name_sets = list(
             self._names_provider.get_related_names(contact.first_name)
         )
+        # No related names? Just use the first name.
+        if not related_name_sets:
+            related_name_sets = [frozenset([contact.first_name])]
         with sao.Session(self._engine) as session:
             for related_name_set in related_name_sets:
                 stmt = self._contact_stmt(contact, related_name_set)
