@@ -13,7 +13,7 @@ from server.data.fec_types import (
 )
 from server.data.manager import DataManager
 from server.utils.format import fmt_usd
-from server.utils.validations import validate_extant_file
+from server.utils.validations import is_extant_file, validate_extant_file
 
 from .nicknames import split_name
 
@@ -302,6 +302,18 @@ class Contribution(BaseModel):
             "amount_cents": self.amount_cents,
             "amount_fmt": fmt_usd(self.amount_cents),
         }
+
+
+def is_extant_db(data_manager: DataManager, state: str) -> bool:
+    """Return whether or not a database exists for the given data manager."""
+    path = data_manager.path / "db" / f"{state}.db"
+    return is_extant_file(path)
+
+
+def validate_extant_db(data_manager: DataManager, state: str) -> None:
+    """Validate the existence of a database for the given data manager."""
+    path = data_manager.path / "db" / f"{state}.db"
+    validate_extant_file(path)
 
 
 def get_engine(data_manager: DataManager, state: str) -> sa.Engine:

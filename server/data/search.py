@@ -2,7 +2,7 @@ import typing as t
 
 from server.data.contacts import Contact, IContactProvider
 from server.data.manager import DataManager
-from server.data.models import get_engine
+from server.data.models import get_engine, is_extant_db
 from server.data.nicknames import NicknamesManager
 from server.data.npa import AreaCodeManager
 from server.data.summaries import (
@@ -37,10 +37,16 @@ class ContactContributionSearcher:
 
             manager = self._state_to_manager.get(state)
             if manager is None:
-                manager = ContributionSummaryManager(
-                    get_engine(self._data_manager, state), self._nicknames_manager
-                )
-                self._state_to_manager[state] = manager
+                # Don't do anything if we have no data for this state.
+                if is_extant_db(self._data_manager, state):
+                    manager = ContributionSummaryManager(
+                        get_engine(self._data_manager, state), self._nicknames_manager
+                    )
+                    self._state_to_manager[state] = manager
+
+            # If we have no data for this state, skip it.
+            if manager is None:
+                continue
 
             summary = manager.preferred_summary_for_contact(alternative)
             if summary is not None:

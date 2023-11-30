@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from server.data.contacts import Contact, IContactProvider, SimpleContactProvider
 from server.data.contacts.abbu import DirectoryABBUManager, ZipABBUManager
+from server.data.contacts.google import GoogleContactExportManager
 from server.data.manager import DataManager
 from server.data.models import (
     Committee,
@@ -49,7 +50,19 @@ def contacts():
     required=False,
     default=None,
 )
-def list_contacts(contact_dir: str | None = None, contact_zip: str | None = None):
+@click.option(
+    "-g",
+    "--google",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    help="Path to a Google contacts CSV file.",
+    required=False,
+    default=None,
+)
+def list_contacts(
+    contact_dir: str | None = None,
+    contact_zip: str | None = None,
+    google: str | None = None,
+):
     """List contacts."""
     contact_provider: IContactProvider | None = None
 
@@ -57,6 +70,8 @@ def list_contacts(contact_dir: str | None = None, contact_zip: str | None = None
         contact_provider = DirectoryABBUManager(contact_dir)
     elif contact_zip is not None:
         contact_provider = ZipABBUManager(contact_zip)
+    elif google is not None:
+        contact_provider = GoogleContactExportManager(google)
 
     if contact_provider is None:
         raise click.UsageError(
@@ -219,6 +234,14 @@ def contributions():
     required=False,
     default=None,
 )
+@click.option(
+    "-g",
+    "--google",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    help="Path to a Google contacts CSV file.",
+    required=False,
+    default=None,
+)
 def search(
     first_name: str | None = None,
     last_name: str | None = None,
@@ -228,6 +251,7 @@ def search(
     data: str | None = None,
     contact_dir: str | None = None,
     contact_zip: str | None = None,
+    google: str | None = None,
 ):
     """Search summarized FEC contributions data."""
     data_manager = DataManager(data) if data is not None else DataManager.default()
@@ -239,6 +263,8 @@ def search(
         contact_provider = DirectoryABBUManager(contact_dir)
     elif contact_zip is not None:
         contact_provider = ZipABBUManager(contact_zip)
+    elif google is not None:
+        contact_provider = GoogleContactExportManager(google)
     elif first_name and last_name and city and state:
         singleton = Contact(
             first_name.upper(),
