@@ -4,6 +4,7 @@ import plistlib
 import typing as t
 import zipfile
 
+from server.data.phone import normalize_e164
 from server.utils.validations import validate_extant_dir, validate_extant_file
 
 from . import Contact
@@ -52,6 +53,8 @@ class ABBUManagerBase(abc.ABC):
                 phone = plist_data["Phone"]["values"][0]
             except Exception:
                 phone = None
+
+            phone = normalize_e164(phone) if phone else None
 
         except Exception:
             return None

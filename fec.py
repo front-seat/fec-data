@@ -13,12 +13,13 @@ from server.data.manager import DataManager
 from server.data.models import (
     Committee,
     Contribution,
-    ZipCode,
     create_db_tables,
     get_engine,
 )
 from server.data.nicknames import NicknamesManager
-from server.data.summaries import ContributionSummaryManager
+from server.data.npa import AreaCodeManager
+from server.data.summaries import AlternativeContactsHelper, ContributionSummaryManager
+from server.data.usps import ZipCodeManager
 
 
 @click.group()
@@ -131,7 +132,6 @@ def init(data: str | None = None):
             create_db_tables(engine)
             with sao.Session(engine) as session, session.begin():
                 session.add_all(Committee.from_data_manager(data_manager))
-                session.add_all(ZipCode.from_data_manager(data_manager))
 
         # Add the batch to the database.
         with sao.Session(engine) as session, session.begin():
@@ -234,6 +234,9 @@ def search(
     """Search summarized FEC contributions data."""
     data_manager = DataManager(data) if data is not None else DataManager.default()
     nicknames_manager = NicknamesManager.from_data_manager(data_manager)
+    area_code_manager = AreaCodeManager.from_data_manager(data_manager)
+    zip_code_manager = ZipCodeManager.from_data_manager(data_manager)
+    alternatives_helper = AlternativeContactsHelper(zip_code_manager, area_code_manager)
 
     contact_provider: IContactProvider | None = None
 
@@ -261,23 +264,26 @@ def search(
     seen_contacts = set()
 
     for contact in contact_provider.get_contacts():
-        if contact.without_zip() in seen_contacts:
-            continue
-        if contact.state is None:
-            continue
-        seen_contacts.add(contact.without_zip())
-        manager = state_to_manager.get(contact.state)
-        if manager is None:
-            manager = ContributionSummaryManager(
-                get_engine(data_manager, contact.state),
-                nicknames_manager,
-            )
-            state_to_manager[contact.state] = manager
-        summary = manager.preferred_summary_for_contact(contact)
-        if summary is None:
-            continue
-        print(contact.first_name.title(), contact.last_name.title())
-        print(str(summary))
+        for alternative in alternatives_helper.get_alternatives(contact):
+            if alternative.duplicate_key in seen_contacts:
+                continue
+            seen_contacts.add(alternative.duplicate_key)
+
+            state = alternative.state
+            assert state
+
+            manager = state_to_manager.get(state)
+            if manager is None:
+                manager = ContributionSummaryManager(
+                    get_engine(data_manager, state),
+                    nicknames_manager,
+                )
+                state_to_manager[state] = manager
+            summary = manager.preferred_summary_for_contact(alternative)
+            if summary is None:
+                continue
+            print(alternative.first_name.title(), alternative.last_name.title())
+            print(str(summary))
 
 
 if __name__ == "__main__":

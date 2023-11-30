@@ -8,6 +8,8 @@ from server.utils.format import fmt_usd
 from .contacts import Contact
 from .models import Committee, Contribution
 from .nicknames import INamesProvider
+from .npa import IAreaCodeProvider
+from .usps import IZipCodeProvider
 
 
 class ContributionSummary:
@@ -124,23 +126,68 @@ class ContributionSummary:
         return "\n".join(lines)
 
 
+class AlternativeContactsHelper:
+    """Tools for finding and refining contact details."""
+
+    def __init__(
+        self, zip_code_provider: IZipCodeProvider, area_code_provider: IAreaCodeProvider
+    ):
+        self._zip_code_provider = zip_code_provider
+        self._area_code_provider = area_code_provider
+
+    def get_alternatives(
+        self,
+        contact: Contact,
+    ) -> t.Iterable[Contact]:
+        """Return useful alternative contacts for a given contact."""
+        # If the contact has a city + state, we're done.
+        if contact.has_city_state:
+            yield contact
+            return
+
+        # If the contact has a zip code, but no city + state, then we need to
+        # find the city + state from the zip code.
+        zip_code = contact.zip_code
+        if zip_code is not None:
+            for city, state in self._zip_code_provider.get_city_states(zip_code):
+                yield contact.with_city_state(city, state)
+            return
+
+        # If the contact has a US area code, but no city + state, then we need
+        # to find the city + state from the area code.
+        npa_id = contact.npa_id
+        if npa_id is not None:
+            for city, state in self._area_code_provider.get_city_states(npa_id):
+                yield contact.with_city_state(city, state)
+
+        # It's possible that no searchable alternatives for this contact exist.
+        # So be it.
+        return
+
+
 class ContributionSummaryManager:
     """Tools for building accurate contribution summaries."""
 
     _engine: sa.Engine
     _names_provider: INamesProvider
 
-    def __init__(self, engine: sa.Engine, names_provider: INamesProvider):
+    def __init__(
+        self,
+        engine: sa.Engine,
+        names_provider: INamesProvider,
+    ):
         self._engine = engine
         self._names_provider = names_provider
 
     def _contact_stmt(self, contact: Contact, related_name_set: frozenset[str]):
         """Return a SQL statement that matches a contact."""
         if contact.zip5 is None:
+            assert contact.city
+            assert contact.state
             return Contribution.for_last_city_state_firsts_stmt(
                 contact.last_name,
-                contact.city or "TODO: NOWHERE",
-                contact.state or "XX",
+                contact.city,
+                contact.state,
                 related_name_set,
             )
         else:
@@ -166,11 +213,13 @@ class ContributionSummaryManager:
         self, contact: Contact
     ) -> ContributionSummary | None:
         """Return the largest contribution summary for a contact."""
-        summaries = list(self._summaries_for_contact(contact))
-        if contact.zip5:
-            contact_no_zip = contact.without_zip()
-            more_summaries = list(self._summaries_for_contact(contact_no_zip))
-            summaries.extend(more_summaries)
+        assert contact.has_city_state
+        try_contacts = [contact]
+        if contact.has_zip:
+            try_contacts.append(contact.without_zip())
+        summaries = []
+        for try_contact in try_contacts:
+            summaries.extend(list(self._summaries_for_contact(try_contact)))
         if not summaries:
             return None
         return max(summaries, key=lambda s: s.total_cents)
