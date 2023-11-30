@@ -10,8 +10,9 @@ class Contact:
 
     first_name: str
     last_name: str
-    city: str
-    state: str
+    city: str | None
+    state: str | None
+    phone: str | None
     zip_code: str | None  # Either 5 or 9 digits
 
     @property
@@ -27,13 +28,17 @@ class Contact:
             "city": self.city,
             "state": self.state,
         }
+        if self.phone:
+            data["phone"] = self.phone
         if self.zip_code:
             data["zip_code"] = self.zip_code
         return data
 
     def without_zip(self) -> "Contact":
         """Return a copy of the contact without the zip code."""
-        return Contact(self.first_name, self.last_name, self.city, self.state, None)
+        return Contact(
+            self.first_name, self.last_name, self.city, self.state, self.phone, None
+        )
 
 
 class IContactProvider(t.Protocol):

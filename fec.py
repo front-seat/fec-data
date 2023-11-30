@@ -28,6 +28,52 @@ def fec():
 
 
 @fec.group()
+def contacts():
+    """Work with contacts data."""
+    pass
+
+
+@contacts.command(name="list")
+@click.option(
+    "-c",
+    "--contact-dir",
+    type=click.Path(exists=True, dir_okay=True, file_okay=False),
+    help="Path to a `.abbu` contacts dir.",
+    required=False,
+    default=None,
+)
+@click.option(
+    "-z",
+    "--contact-zip",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    help="Path to a `.abbu` contacts zip file.",
+    required=False,
+    default=None,
+)
+def list_contacts(contact_dir: str | None = None, contact_zip: str | None = None):
+    """List contacts."""
+    contact_provider: IContactProvider | None = None
+
+    if contact_dir is not None:
+        contact_provider = DirectoryABBUManager(contact_dir)
+    elif contact_zip is not None:
+        contact_provider = ZipABBUManager(contact_zip)
+
+    if contact_provider is None:
+        raise click.UsageError(
+            "You must provide a contact dir, zip file, or explicit name & zip."
+        )
+
+    seen_contacts = set()
+
+    for contact in contact_provider.get_contacts():
+        if contact.without_zip() in seen_contacts:
+            continue
+        seen_contacts.add(contact.without_zip())
+        print(json.dumps(contact.to_data()))
+
+
+@fec.group()
 def names():
     """Work with names data."""
     pass
@@ -197,7 +243,12 @@ def search(
         contact_provider = ZipABBUManager(contact_zip)
     elif first_name and last_name and city and state:
         singleton = Contact(
-            first_name.upper(), last_name.upper(), city.upper(), state.upper(), zip_code
+            first_name.upper(),
+            last_name.upper(),
+            city.upper(),
+            state.upper(),
+            None,
+            zip_code,
         )
         contact_provider = SimpleContactProvider([singleton])
 
@@ -211,6 +262,8 @@ def search(
 
     for contact in contact_provider.get_contacts():
         if contact.without_zip() in seen_contacts:
+            continue
+        if contact.state is None:
             continue
         seen_contacts.add(contact.without_zip())
         manager = state_to_manager.get(contact.state)

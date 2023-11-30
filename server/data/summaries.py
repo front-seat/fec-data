@@ -139,8 +139,8 @@ class ContributionSummaryManager:
         if contact.zip5 is None:
             return Contribution.for_last_city_state_firsts_stmt(
                 contact.last_name,
-                contact.city,
-                contact.state,
+                contact.city or "TODO: NOWHERE",
+                contact.state or "XX",
                 related_name_set,
             )
         else:

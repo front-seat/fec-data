@@ -2,6 +2,7 @@ aiosqlite~=0.19.0
 click~=8.1.7
 httpx~=0.25.1
 litestar[standard]~=2.3.2
+phonenumbers~=8.13.26
 pydantic-settings~=2.1.0
 pydantic~=2.5.1
 sqlalchemy~=2.0.23
