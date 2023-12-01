@@ -8,6 +8,7 @@ from litestar.enums import RequestEncodingType
 from litestar.params import Body
 
 from server.data.contacts.abbu import ZipABBUManager
+from server.data.contacts.google import GoogleContactExportManager
 from server.data.manager import DataManager
 from server.data.search import ContactContributionSearcher
 
@@ -31,6 +32,14 @@ async def search(
     data: t.Annotated[UploadFile, Body(media_type=RequestEncodingType.MULTI_PART)]
 ) -> dict:
     """Search a collection of contacts and summarize them."""
+    is_zip = data.content_type == "application/zip"
+    is_csv = data.content_type == "text/csv"
+    if not (is_zip or is_csv):
+        return {
+            "ok": False,
+            "message": "Invalid file type.",
+            "code": "invalid_file_type",
+        }
     content = await data.read()
     # Write to a temporary file; then pass it to the ZipABBUManager.
     # Be sure to clean up the temporary file when we're done.
@@ -38,7 +47,11 @@ async def search(
         temp.write(content)
         temp.flush()
         data_manager = DataManager.default()
-        contact_manager = ZipABBUManager(temp.name)
+        contact_manager = (
+            ZipABBUManager(temp.name)
+            if is_zip
+            else GoogleContactExportManager(temp.name)
+        )
         searcher = ContactContributionSearcher(data_manager)
         results = list(searcher.search_and_summarize_contacts(contact_manager))
         return {
