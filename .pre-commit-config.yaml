@@ -1,4 +1,21 @@
 repos:
+  # Run `npm run lint`
+  - repo: local
+    hooks:
+      - id: jslint
+        name: jslint
+        entry: npm run lint
+        language: system
+        files: \.(ts|tsx|js|jsx)$
+
+  - repo: local
+    hooks:
+      - id: tsc
+        name: tsc
+        entry: npm run type-check
+        language: system
+        pass_filenames: false
+
   - repo: https://github.com/psf/black
     rev: 23.11.0
     hooks:
