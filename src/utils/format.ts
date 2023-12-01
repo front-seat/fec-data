@@ -5,14 +5,17 @@ export const toTitleCase = (s: string): string =>
     .replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1));
 
 /** Format a number as a percentage. */
-export const formatPercent = (percent: number): string =>
-  `${(percent * 100).toFixed(1)}%`;
+export const formatPercent = (percent: number, places: number = 1): string =>
+  `${(percent * 100).toFixed(places)}%`;
 
 /** Format a number as a dollar amount. */
-export const formatUSD = (cents: number): string =>
+export const formatUSD = (cents: number, fractionDigits: number = 0): string =>
+  // format without cents.
   new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   }).format(cents / 100);
 
 /** Format a party abbreviation as a full party name. */
