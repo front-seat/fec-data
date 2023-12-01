@@ -31,4 +31,4 @@ Then, you'll need to run both the Vite front-end server AND the python+litestar 
 ./scripts/run.sh
 ```
 
-Pop open the requisite URL and rejoice.
+Pop open http://localhost:2222/ and you should see the app.
