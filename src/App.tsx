@@ -1,19 +1,48 @@
+import React, { useCallback, useState } from "react";
 import "./App.css";
+import type { SearchResponse } from "./api";
+import { search } from "./api";
+import { Chrome } from "./components/Chrome";
+import { Hero } from "./components/Hero";
+import { SearchResultsView } from "./views/SearchResultsView";
+import { UploadView } from "./views/UploadView";
 
-function App() {
+const NotStarted: React.FC<{ onGetStarted: () => void }> = ({
+  onGetStarted,
+}) => <Hero onGetStarted={onGetStarted} />;
+
+const Started: React.FC<{
+  response: SearchResponse | null;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+}> = ({ response, onSubmit }) => (
+  <div>
+    {response && response.ok ? (
+      <SearchResultsView response={response} />
+    ) : (
+      <UploadView response={response} onSubmit={onSubmit} />
+    )}
+  </div>
+);
+
+const TenAgainstTrump: React.FC = () => {
+  const [started, setStarted] = useState(false);
+  const [response, setResponse] = useState<SearchResponse | null>(null);
+
+  const onSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    setResponse(await search(formData));
+  }, []);
+
   return (
-    <div>
-      <h1 className="font-bold text-4xl pb-8">TenForTrump</h1>
-      <p>Upload your contacts.zip file here:</p>
-      <form action="/search" method="post" encType="multipart/form-data">
-        <input
-          type="file"
-          id="contacts"
-          className="mt-8 border-2 border-gray-200 p-2 rounded-md bg-gray-50"
-        />
-      </form>
-    </div>
+    <Chrome>
+      {started ? (
+        <Started response={response} onSubmit={onSubmit} />
+      ) : (
+        <NotStarted onGetStarted={() => setStarted(true)} />
+      )}
+    </Chrome>
   );
-}
+};
 
-export default App;
+export default TenAgainstTrump;

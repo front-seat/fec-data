@@ -1,12 +1,16 @@
 import pathlib
+import tempfile
+import typing as t
 
-from litestar import Litestar, get
+from litestar import Litestar, get, post
+from litestar.datastructures import UploadFile
+from litestar.enums import RequestEncodingType
+from litestar.params import Body
 
-from server.data.contacts import Contact
+from server.data.contacts.abbu import ZipABBUManager
+from server.data.contacts.google import GoogleContactExportManager
 from server.data.manager import DataManager
-from server.data.models import get_engine
-from server.data.nicknames import NicknamesManager
-from server.data.summaries import ContributionSummaryManager
+from server.data.search import ContactContributionSearcher
 
 
 @get("/")
@@ -23,16 +27,43 @@ async def frontend(path: pathlib.Path) -> dict:
     return {"file": str(path)}
 
 
-@get("/summarize", sync_to_thread=True)
-def summarize() -> dict:
-    """Summarize somebody."""
-    data_manager = DataManager.default()
-    nicknames_manager = NicknamesManager.from_data_manager(data_manager)
-    engine = get_engine(data_manager, "WA")
-    contact = Contact("MICHAEL", "MATHIEU", "SEATTLE", "WA", None, None)
-    summary_manager = ContributionSummaryManager(engine, nicknames_manager)
-    summary = summary_manager.preferred_summary_for_contact(contact)
-    return summary.to_data() if summary else {}
+@post("/api/search")
+async def search(
+    data: t.Annotated[UploadFile, Body(media_type=RequestEncodingType.MULTI_PART)]
+) -> dict:
+    """Search a collection of contacts and summarize them."""
+    is_zip = data.content_type == "application/zip"
+    is_csv = data.content_type == "text/csv"
+    if not (is_zip or is_csv):
+        return {
+            "ok": False,
+            "message": "Invalid file type.",
+            "code": "invalid_file_type",
+        }
+    content = await data.read()
+    # Write to a temporary file; then pass it to the ZipABBUManager.
+    # Be sure to clean up the temporary file when we're done.
+    with tempfile.NamedTemporaryFile() as temp:
+        temp.write(content)
+        temp.flush()
+        data_manager = DataManager.default()
+        contact_manager = (
+            ZipABBUManager(temp.name)
+            if is_zip
+            else GoogleContactExportManager(temp.name)
+        )
+        searcher = ContactContributionSearcher(data_manager)
+        results = list(searcher.search_and_summarize_contacts(contact_manager))
+        return {
+            "ok": True,
+            "results": [
+                {
+                    "contact": result[0].to_data(),
+                    "summary": result[1].to_data(),
+                }
+                for result in results
+            ],
+        }
 
 
-app = Litestar([summarize, frontend, frontend_root])
+app = Litestar([search, frontend, frontend_root])
