@@ -5,18 +5,18 @@ import { TextAvatar } from "./Avatar";
 
 const navigation: { name: string; href: string }[] = [];
 
-const footerNavigation = {
-  us: [
-    { name: "About", href: "#" },
-    { name: "Blog", href: "#" },
-    { name: "Press", href: "#" },
-    { name: "Partners", href: "#" },
-  ],
-  legal: [
-    { name: "Privacy", href: "#" },
-    { name: "Terms", href: "#" },
-  ],
-};
+// const footerNavigation = {
+//   us: [
+//     { name: "About", href: "#" },
+//     { name: "Blog", href: "#" },
+//     { name: "Press", href: "#" },
+//     { name: "Partners", href: "#" },
+//   ],
+//   legal: [
+//     { name: "Privacy", href: "#" },
+//     { name: "Terms", href: "#" },
+//   ],
+// };
 
 export const Chrome: React.FC<React.PropsWithChildren> = ({ children }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -157,59 +157,6 @@ export const Chrome: React.FC<React.PropsWithChildren> = ({ children }) => {
           </div>
         </div>
       </main>
-
-      {/* Footer */}
-      <div className="mx-auto mt-32 max-w-7xl px-6 lg:px-8">
-        <footer
-          aria-labelledby="footer-heading"
-          className="relative border-t border-gray-900/10 py-8 sm:py-12"
-        >
-          <h2 id="footer-heading" className="sr-only">
-            Footer
-          </h2>
-          <div className="flex flex-col">
-            <TextAvatar className="h-12 w-12 bg-blue-700 self-center">
-              TxT
-            </TextAvatar>
-            <div className="mt-8 flex flex-row justify-evenly items-start">
-              <div>
-                <h3 className="text-lg font-semibold leading-6 text-gray-900">
-                  Us
-                </h3>
-                <ul role="list" className="mt-6 space-y-4">
-                  {footerNavigation.us.map((item) => (
-                    <li key={item.name}>
-                      <a
-                        href={item.href}
-                        className="text-lg leading-6 text-gray-600 hover:text-gray-900 hover:underline"
-                      >
-                        {item.name}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="">
-                <h3 className="text-lg font-semibold leading-6 text-gray-900">
-                  Legal
-                </h3>
-                <ul role="list" className="mt-6 space-y-4">
-                  {footerNavigation.legal.map((item) => (
-                    <li key={item.name}>
-                      <a
-                        href={item.href}
-                        className="text-lg leading-6 text-gray-600 hover:text-gray-900 hover:underline"
-                      >
-                        {item.name}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        </footer>
-      </div>
     </div>
   );
 };
