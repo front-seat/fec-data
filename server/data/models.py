@@ -17,6 +17,28 @@ from server.utils.validations import is_extant_file, validate_extant_file
 
 from .nicknames import split_name
 
+# IDs of FEC committees that are known to be Democratic, even if they
+# don't report that way in the database. ActBlue is the key example.
+
+KNOWN_DEM_COMMITTEE_IDS = {
+    # ActBlue
+    "C00401224",
+    # Biden Victory Fund
+    "C00744946",
+    # MoveOn.org Political Action
+    "C00341396",
+    # Golden Tennis Shoe PAC 2020
+    "C00763003",
+    # The IMPACT Fund
+    "C90020884",
+    # Washington Women for Choice
+    "C00368332",
+    # Movement Voter PAC
+    "C00728360",
+    # Fair Fight
+    "C00693515",
+}
+
 
 class BaseModel(sao.DeclarativeBase):
     """Base class for all SQL models."""
@@ -107,12 +129,22 @@ class Committee(BaseModel):
         statement = cls.for_name_stmt(name)
         return session.execute(statement).scalars()
 
+    @property
+    def adjusted_party(self) -> str:
+        """
+        Return the FEC reported party, except in a few key cases,
+        where we know better.
+        """
+        if self.id in KNOWN_DEM_COMMITTEE_IDS:
+            return Party.DEMOCRAT
+        return self.party
+
     def to_data(self) -> dict[str, str]:
         """Return a dictionary representation of this committee."""
         return {
             "id": self.id,
             "name": self.name,
-            "party": self.party,
+            "party": self.adjusted_party,
             "candidate_id": self.candidate_id,
         }
 
@@ -292,7 +324,7 @@ class Contribution(BaseModel):
             "id": self.id,
             "committee_id": self.committee_id,
             "committee_name": self.committee.name,
-            "committee_party": self.committee.party,
+            "committee_party": self.committee.adjusted_party,
             "last_name": self.last_name,
             "first_name": self.first_name,
             "city": self.city,

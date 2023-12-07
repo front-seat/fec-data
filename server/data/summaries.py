@@ -60,7 +60,10 @@ class ContributionSummary:
     def parties(self) -> t.Iterable[str]:
         """Return the parties that received contributions."""
         return sorted(
-            {contribution.committee.party for contribution in self._contributions}
+            {
+                contribution.committee.adjusted_party
+                for contribution in self._contributions
+            }
         )
 
     def party_total_cents(self, party: str) -> int:
@@ -68,7 +71,7 @@ class ContributionSummary:
         return sum(
             contribution.amount_cents
             for contribution in self._contributions
-            if contribution.committee.party == party
+            if contribution.committee.adjusted_party == party
         )
 
     def party_total_fmt(self, party: str) -> str:
@@ -87,7 +90,7 @@ class ContributionSummary:
             "committees": {
                 committee.id: {
                     "name": committee.name,
-                    "party": committee.party,
+                    "party": committee.adjusted_party,
                     "total_cents": self.committee_total_cents(committee),
                     "total_fmt": self.committee_total_fmt(committee),
                     "percent": self.committee_percent(committee),
@@ -120,7 +123,7 @@ class ContributionSummary:
         lines.append("\n\tCommittees:")
         for committee in self.committees():
             lines.append(
-                f"\t\t{committee.name} ({committee.party}): {self.committee_total_fmt(committee)} ({self.committee_percent(committee):.2%})"  # noqa: E501
+                f"\t\t{committee.name} ({committee.adjusted_party}): {self.committee_total_fmt(committee)} ({self.committee_percent(committee):.2%})"  # noqa: E501
             )
 
         return "\n".join(lines)
