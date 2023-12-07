@@ -37,6 +37,14 @@ KNOWN_DEM_COMMITTEE_IDS = {
     "C00728360",
     # Fair Fight
     "C00693515",
+    # EMILY's List
+    "C00193433",
+    # INDIVISIBLE Action
+    "C00678839",
+    # National Democratic Redistricting PAC
+    "C00630707",
+    # ONE FOR ALL Committee
+    "C00752691",
 }
 
 
