@@ -140,9 +140,9 @@ def contributions():
 @contributions.command()
 @click.argument("first_name", required=False, default=None)
 @click.argument("last_name", required=False, default=None)
+@click.argument("zip_code", required=False, default=None)
 @click.argument("city", required=False, default=None)
 @click.argument("state", required=False, default=None)
-@click.argument("zip_code", required=False, default=None)
 @click.option(
     "-c",
     "--contact-dir",

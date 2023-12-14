@@ -200,9 +200,9 @@ class ContributionSummaryManager:
         try_contacts = [contact]
         if contact.has_zip:
             try_contacts.append(contact.without_zip())
-        summaries = []
+        summaries: list[ContributionSummary] = []
         for try_contact in try_contacts:
             summaries.extend(list(self._summaries_for_contact(try_contact)))
         if not summaries:
             return None
-        return max(summaries, key=lambda s: s.total_cents)
+        return max(summaries, key=lambda s: s.total)

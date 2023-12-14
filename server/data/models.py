@@ -12,7 +12,6 @@ from decimal import Decimal
 import pydantic as p
 
 from server.data.fec_types import (
-    ContributionColumns,
     EntityTypeCode,
     Party,
 )
@@ -79,7 +78,7 @@ class CommitteeTable(Table[Committee]):
     """Tools for querying the BigQuery committee master file."""
 
     def __init__(self, client: BQClient, year: str | datetime.date):
-        super().__init__(client, f"cm{get_yy(year)}")
+        super().__init__(client, f"bigquery-public-data.fec.cm{get_yy(year)}")
 
     def get_model_instance(self, row: t.Any) -> Committee:
         """Create a committee from a row of the committee master file."""
@@ -92,7 +91,7 @@ class CommitteeTable(Table[Committee]):
 
     def for_name_stmt(self, name: str) -> Statement:
         """Return a select statement for committees matching the given criteria."""
-        return self.all_stmt().where("cmte_nm", "LIKE", name.upper())
+        return self.all_stmt().where("cmte_nm", "LIKE", f"%{name.upper()}%")
 
     def for_name(self, name: str) -> t.Iterable[Committee]:
         """Return a query for committees matching the given criteria."""
@@ -114,7 +113,7 @@ class Contribution(p.BaseModel, frozen=True):
 class ContributionTable(Table[Contribution]):
     def __init__(self, client: BQClient, year: str | datetime.date):
         self._committee_table = CommitteeTable(client, year)
-        super().__init__(client, f"indiv{get_yy(year)}")
+        super().__init__(client, f"bigquery-public-data.fec.indiv{get_yy(year)}")
 
     def all_stmt(self) -> Statement:
         """
@@ -125,8 +124,8 @@ class ContributionTable(Table[Contribution]):
             super()
             .all_stmt()
             .where("entity_tp", "=", "IND")
-            .where("amount", ">", 0)
-            .join(self._committee_table.name, "cmte_id", "cmte_id")
+            .where("transaction_amt", ">", 0)
+            .join(self._committee_table.name, "indiv20.cmte_id = cm20.cmte_id")
         )
 
     def for_last_zip_firsts_stmt(
@@ -174,28 +173,32 @@ class ContributionTable(Table[Contribution]):
 
     def get_model_instance(self, row: t.Any) -> Contribution | None:
         """Insert a contribution from a row of the contributions file."""
-        sub_id = row[ContributionColumns.SUB_ID].strip()
+        sub_id = (str(row.sub_id) or "").strip()
         if not sub_id:
             return None
-        committee_id = row[ContributionColumns.COMMITTEE_ID].strip()
+        committee_id = (row.cmte_id or "").strip()
         if not committee_id:
             return None
-        entity_type = row[ContributionColumns.ENTITY_TYPE].strip()
+        entity_type = (row.entity_tp or "").strip()
         if entity_type != EntityTypeCode.INDIVIDUAL:
             return None
-        name = row[ContributionColumns.NAME].strip()
+        name = (row.name or "").strip()
         if "," not in name:
             return None
-        city = row[ContributionColumns.CITY].strip()
+        city = (row.city or "").strip()
         if not city:
             return None
-        state = row[ContributionColumns.STATE].strip()
+        state = (row.state or "").strip()
         if not state:
             return None
-        zip_code = row[ContributionColumns.ZIP_CODE].strip()
+        zip_code = (row.zip_code or "").strip()
         if len(zip_code) not in {5, 9}:
             return None
-        amount = row[ContributionColumns.TRANSACTION_AMOUNT].strip()
+        amount_str = (str(row.transaction_amt) or "").strip()
+        try:
+            amount = Decimal(amount_str)
+        except Exception:
+            return None
         committee = self._committee_table.get_model_instance(row)
         if committee is None:
             return None
@@ -206,5 +209,5 @@ class ContributionTable(Table[Contribution]):
             city=city,
             state=state,
             zip_code=zip_code,
-            amount=Decimal(amount),
+            amount=amount,
         )

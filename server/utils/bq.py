@@ -13,17 +13,27 @@ type QueryParamValue = str | int | float | datetime.date | datetime.datetime | t
 type QueryParams = t.Mapping[str, QueryParamValue]
 
 
+def default_table_alias(table_name: str, table_alias: str | None = None) -> str | None:
+    """Return the default table alias if appropriate, and no explicit alias is given."""
+    if not table_alias and "." in table_name:
+        table_alias = table_name.split(".")[-1]
+    return table_alias
+
+
 class Statement:
     """A BigQuery SQL statement builder."""
 
     table_name: str
+    table_alias: str | None
     select_columns: list[str]
     filters: list[str]
     joins: list[str]
     params: dict[str, QueryParamValue]
 
-    def __init__(self, table_name: str):
+    def __init__(self, table_name: str, table_alias: str | None = None):
         self.table_name = table_name
+        self.table_alias = default_table_alias(table_name, table_alias)
+        self.table_alias = table_alias
         self.select_columns = []
         self.filters = []
         self.joins = []
@@ -53,9 +63,15 @@ class Statement:
         self.filters.append(condition.strip())
         return self
 
-    def join(self, join_type, table_name, on_clause):
+    def join(
+        self, table_name, on_clause, join_type="INNER", table_alias: str | None = None
+    ):
         """Add a JOIN clause to the query."""
-        self.joins.append(f"{join_type} JOIN {table_name} ON {on_clause}")
+        table_alias = default_table_alias(table_name, table_alias)
+        alias_clause = f" AS {table_alias}" if table_alias else ""
+        self.joins.append(
+            f"{join_type} JOIN `{table_name}`{alias_clause} ON {on_clause}"
+        )
         return self
 
     def build_query(self):
@@ -64,8 +80,10 @@ class Statement:
         join_clause = " ".join(self.joins).strip()
         where_clause = " AND ".join(self.filters) if self.filters else ""
 
+        alias_clause = f" AS {self.table_alias}" if self.table_alias else ""
+
         query_parts = [
-            f"SELECT {select_clause} FROM '{self.table_name}'",
+            f"SELECT {select_clause} FROM `{self.table_name}`{alias_clause}",
         ]
         if join_clause:
             query_parts.append(join_clause)
@@ -109,6 +127,7 @@ class BQClient(bigquery.Client):
     def execute(self, statement: Statement):
         """Execute the query."""
         query = statement.build_query()
+        # print("EXECUTING: ", query, "WITH PARAMS: ", statement.params)
         job_config = statement.build_query_job_config()
         job = self.query(query, job_config=job_config)
         return job.result()
@@ -119,10 +138,12 @@ class Table[ModelT](ABC):
 
     client: BQClient
     name: str
+    alias: str | None
 
-    def __init__(self, client: BQClient, name: str):
+    def __init__(self, client: BQClient, name: str, alias: str | None = None):
         self.client = client
         self.name = name
+        self.alias = default_table_alias(name, alias)
 
     @abstractmethod
     def get_model_instance(self, bq_row: t.Any) -> ModelT:
@@ -135,7 +156,7 @@ class Table[ModelT](ABC):
 
     def all_stmt(self) -> Statement:
         """Return the default statement."""
-        return Statement(self.name)
+        return Statement(self.name, self.alias)
 
     def all(self) -> t.Iterable[ModelT]:
         """Return the default query."""
