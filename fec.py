@@ -4,22 +4,16 @@
 import json
 
 import click
-import sqlalchemy.orm as sao
-from tqdm import tqdm
 
 from server.data.contacts import Contact, IContactProvider, SimpleContactProvider
 from server.data.contacts.abbu import DirectoryABBUManager, ZipABBUManager
 from server.data.contacts.google import GoogleContactExportManager
 from server.data.contacts.linkedin import LinkedInContactsManager
 from server.data.manager import DataManager
-from server.data.models import (
-    Committee,
-    Contribution,
-    create_db_tables,
-    get_engine,
-)
+from server.data.models import CommitteeTable
 from server.data.nicknames import NicknamesManager
 from server.data.search import ContactContributionSearcher
+from server.utils.bq import get_client
 
 
 @click.group()
@@ -123,72 +117,6 @@ def related(name: str, data: str | None = None):
 
 
 @fec.group()
-def db():
-    """Work with the database."""
-    pass
-
-
-@db.command()
-@click.option(
-    "--data",
-    type=click.Path(exists=True),
-    help="Path to data dir.",
-    required=False,
-    default=None,
-)
-def init(data: str | None = None):
-    """Initialize the database."""
-    data_manager = DataManager(data) if data is not None else DataManager.default()
-
-    batch_size = 1_000
-    state_to_engine = {}
-    state_to_buffer = {}
-
-    def _process_buffer(state: str, contributions: list[Contribution]):
-        """Add a batch of contributions to the database."""
-        # A batch is ready to be added to the database.
-        engine = state_to_engine.get(state)
-
-        # Create a new engine if we don't have one for this state, and create
-        # the database tables.
-        if engine is None:
-            engine = get_engine(data_manager, state)
-            state_to_engine[state] = engine
-            create_db_tables(engine)
-            with sao.Session(engine) as session, session.begin():
-                session.add_all(Committee.from_data_manager(data_manager))
-
-        # Add the batch to the database.
-        with sao.Session(engine) as session, session.begin():
-            session.add_all(contributions)
-
-    print("Adding individual contributions...")
-    for contribution in tqdm(
-        Contribution.from_data_manager(data_manager),
-        unit="contribution",
-        total=70_659_611,
-    ):
-        # Queue up contributions by state.
-        state = contribution.state
-        state_to_buffer.setdefault(state, []).append(contribution)
-        if len(state_to_buffer[state]) < batch_size:
-            continue
-
-        _process_buffer(state, state_to_buffer[state])
-        state_to_buffer[state] = []
-
-    # Add any remaining contributions.
-    print("Adding remaining contributions...")
-    for state, contributions in state_to_buffer.items():
-        if not contributions:
-            continue
-        _process_buffer(state, contributions)
-        state_to_buffer[state] = []
-
-    print("Done.")
-
-
-@fec.group()
 def committees():
     """Work with FEC committees data."""
     pass
@@ -196,19 +124,11 @@ def committees():
 
 @committees.command(name="search")
 @click.argument("name")
-@click.option(
-    "--data",
-    type=click.Path(exists=True),
-    help="Path to data dir.",
-    required=False,
-    default=None,
-)
 def committee_search(name: str, data: str | None = None):
     """Search FEC committees data."""
-    data_manager = DataManager(data) if data is not None else DataManager.default()
-    with sao.Session(get_engine(data_manager, "WA")) as session:
-        for committee in Committee.for_name(session, name):
-            print(json.dumps(committee.to_data(), indent=2))
+    committee_table = CommitteeTable(get_client(), "2020")
+    for committee in committee_table.for_name(name):
+        print(json.dumps(committee.model_dump(mode="json"), indent=2))
 
 
 @fec.group()
@@ -276,7 +196,8 @@ def search(
 ):
     """Search summarized FEC contributions data."""
     data_manager = DataManager(data) if data is not None else DataManager.default()
-    searcher = ContactContributionSearcher(data_manager)
+    client = get_client()
+    searcher = ContactContributionSearcher(client, "2020", data_manager)
 
     contact_provider: IContactProvider | None = None
 

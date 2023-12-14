@@ -21,6 +21,11 @@ def split_name(name: str) -> tuple[str, str]:
     return last, first
 
 
+def join_name(last: str, first: str) -> str:
+    """Join a last and first name into a full name."""
+    return f"{last.strip()}, {first.strip()}".upper()
+
+
 class INamesProvider(t.Protocol):
     """A protocol for getting related names."""
 
