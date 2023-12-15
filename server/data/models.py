@@ -1,21 +1,23 @@
-import pathlib
+"""
+Tools for working on top of the FEC BigQuery dataset.
+
+See 
+https://console.cloud.google.com/bigquery?p=bigquery-public-data&d=fec&page=dataset&project=five-minute-5 
+"""
+
+import datetime
 import typing as t
 from decimal import Decimal
 
-import sqlalchemy as sa
-import sqlalchemy.orm as sao
+import pydantic as p
 
 from server.data.fec_types import (
-    CommitteeColumns,
-    ContributionColumns,
     EntityTypeCode,
     Party,
 )
-from server.data.manager import DataManager
-from server.utils.format import fmt_usd
-from server.utils.validations import is_extant_file, validate_extant_file
+from server.utils.bq import BQClient, Statement, Table
 
-from .nicknames import split_name
+from .nicknames import join_name
 
 # IDs of FEC committees that are known to be Democratic, even if they
 # don't report that way in the database. ActBlue is the key example.
@@ -48,97 +50,21 @@ KNOWN_DEM_COMMITTEE_IDS = {
 }
 
 
-class BaseModel(sao.DeclarativeBase):
-    """Base class for all SQL models."""
-
-    @classmethod
-    def all_stmt(cls):
-        """Return a select statement that includes all records."""
-        return sa.select(cls)
-
-    @classmethod
-    def all(cls, session: sao.Session):
-        """Return a query that includes all records."""
-        statement = cls.all_stmt()
-        return session.execute(statement).scalars()
-
-    @classmethod
-    def count(cls, session: sao.Session) -> int:
-        """Return the number of failures in the database."""
-        id_attr = getattr(cls, "id", None)
-        if id_attr is None:
-            raise ValueError(f"Model {cls} has no id attribute")
-        maybe_result = session.execute(sa.select(sa.func.count(id_attr))).scalar()
-        return maybe_result or 0
+def get_yy(yy: str | datetime.date) -> str:
+    """Return the two-digit year for the given date."""
+    return yy.strftime("%y") if isinstance(yy, datetime.date) else yy[-2:]
 
 
-class Committee(BaseModel):
+class Committee(p.BaseModel, frozen=True):
     """Represents an FEC committee."""
 
-    __tablename__ = "committees"
-
-    id: sao.Mapped[str] = sao.mapped_column(sa.String(18), primary_key=True)
-    name: sao.Mapped[str] = sao.mapped_column(
-        sa.String(128), nullable=False, index=True
-    )
-    party: sao.Mapped[str] = sao.mapped_column(sa.String(3), nullable=False)
-    candidate_id: sao.Mapped[str] = sao.mapped_column(sa.String(18), nullable=True)
-
-    @classmethod
-    def from_committee_row(cls, row: t.Sequence[str]) -> t.Self:
-        """Create a committee from a row of the committee master file."""
-        return cls(
-            id=row[CommitteeColumns.ID].strip(),
-            name=row[CommitteeColumns.NAME].strip().upper(),
-            party=row[CommitteeColumns.PARTY].strip().upper() or Party.UNKNOWN,
-            candidate_id=row[CommitteeColumns.CANDIDATE_ID].strip() or None,
-        )
-
-    @classmethod
-    def from_csv_io(
-        cls,
-        text_io: t.TextIO,
-    ) -> t.Iterable[t.Self]:
-        """Create committees from a FEC committee master file."""
-        rows = (row.strip().split("|") for row in text_io)
-        return (cls.from_committee_row(row) for row in rows)
-
-    @classmethod
-    def from_path(
-        cls,
-        path: pathlib.Path,
-    ) -> t.Iterable[t.Self]:
-        """Create committees from a FEC committee master file on disk."""
-        path = validate_extant_file(path)
-        with path.open() as file:
-            yield from cls.from_csv_io(file)
-
-    @classmethod
-    def from_data_manager(
-        cls,
-        data_manager: DataManager,
-        year: int = 2020,
-    ) -> t.Iterable[t.Self]:
-        """Create committees from a FEC committee master file."""
-        return cls.from_path(data_manager.path / "fec" / f"committees-{year}.txt")
-
-    @classmethod
-    def for_name_stmt(cls, name: str):
-        """Return a select statement for committees matching the given criteria."""
-        return sa.select(cls).where(cls.name.ilike(f"%{name.upper()}%"))
-
-    @classmethod
-    def for_name(
-        cls,
-        session: sao.Session,
-        name: str,
-    ) -> t.Iterable[t.Self]:
-        """Return a query for committees matching the given criteria."""
-        statement = cls.for_name_stmt(name)
-        return session.execute(statement).scalars()
+    id: str
+    name: str | None
+    party: str | None
+    candidate_id: str | None
 
     @property
-    def adjusted_party(self) -> str:
+    def adjusted_party(self) -> str | None:
         """
         Return the FEC reported party, except in a few key cases,
         where we know better.
@@ -147,222 +73,141 @@ class Committee(BaseModel):
             return Party.DEMOCRAT
         return self.party
 
-    def to_data(self) -> dict[str, str]:
-        """Return a dictionary representation of this committee."""
-        return {
-            "id": self.id,
-            "name": self.name,
-            "party": self.adjusted_party,
-            "candidate_id": self.candidate_id,
-        }
+
+class CommitteeTable(Table[Committee]):
+    """Tools for querying the BigQuery committee master file."""
+
+    def __init__(self, client: BQClient, year: str | datetime.date):
+        super().__init__(client, f"bigquery-public-data.fec.cm{get_yy(year)}")
+
+    def get_model_instance(self, row: t.Any) -> Committee:
+        """Create a committee from a row of the committee master file."""
+        return Committee(
+            id=row.cmte_id,
+            name=row.cmte_nm,
+            party=row.cmte_pty_affiliation,
+            candidate_id=row.cand_id,
+        )
+
+    def for_name_stmt(self, name: str) -> Statement:
+        """Return a select statement for committees matching the given criteria."""
+        return self.all_stmt().where("cmte_nm", "LIKE", f"%{name.upper()}%")
+
+    def for_name(self, name: str) -> t.Iterable[Committee]:
+        """Return a query for committees matching the given criteria."""
+        return self.execute(self.for_name_stmt(name))
 
 
-class Contribution(BaseModel):
+class Contribution(p.BaseModel, frozen=True):
     """Represents a single indvidual FEC contribution."""
 
-    __tablename__ = "contributions"
+    id: str
+    name: str
+    city: str
+    state: str
+    zip_code: str
+    amount: Decimal
+    committee: Committee
 
-    id: sao.Mapped[str] = sao.mapped_column(sa.String(18), primary_key=True)
-    committee_id: sao.Mapped[str] = sao.mapped_column(
-        sa.String(18), sa.ForeignKey("committees.id"), nullable=False
-    )
-    committee: sao.Mapped[Committee] = sao.relationship(Committee, lazy="joined")
-    last_name: sao.Mapped[str] = sao.mapped_column(sa.String(64), nullable=False)
-    first_name: sao.Mapped[str] = sao.mapped_column(sa.String(64), nullable=False)
-    city: sao.Mapped[str] = sao.mapped_column(sa.String(64), nullable=False)
-    state: sao.Mapped[str] = sao.mapped_column(sa.String(2), nullable=False)
-    zip5: sao.Mapped[str] = sao.mapped_column(sa.String(5), nullable=False)
-    zip_code: sao.Mapped[str] = sao.mapped_column(sa.String(9), nullable=False)
-    amount_cents: sao.Mapped[int] = sao.mapped_column(sa.Integer, nullable=False)
 
-    # We need to create indexes on the columns we'll be querying on.
-    __table_args__ = (
-        sa.Index("last_name_zip5_first_name", last_name, zip5, first_name),
-        sa.Index("last_name_city_state_first_name", last_name, city, state, first_name),
-    )
+class ContributionTable(Table[Contribution]):
+    def __init__(self, client: BQClient, year: str | datetime.date):
+        self._committee_table = CommitteeTable(client, year)
+        super().__init__(client, f"bigquery-public-data.fec.indiv{get_yy(year)}")
 
-    @classmethod
+    def all_stmt(self) -> Statement:
+        """
+        Make the default all_stmt filter to true individuals only and always
+        join the committee master file.
+        """
+        return (
+            super()
+            .all_stmt()
+            .where("entity_tp", "=", "IND")
+            .where("transaction_amt", ">", 0)
+            .join(self._committee_table.name, "indiv20.cmte_id = cm20.cmte_id")
+        )
+
     def for_last_zip_firsts_stmt(
-        cls, last_name: str, zip_code: str, first_names: t.Iterable[str]
-    ):
+        self, last_name: str, zip_code: str, first_names: t.Iterable[str]
+    ) -> Statement:
         """Return a select statement for contributions matching the given criteria."""
-        clean_first_names = [name.upper() for name in first_names]
-        if len(clean_first_names) == 1:
-            return sa.select(cls).where(
-                cls.last_name == last_name.upper(),
-                cls.zip5 == zip_code[:5],
-                cls.first_name == clean_first_names[0],
-            )
-        else:
-            return sa.select(cls).where(
-                cls.last_name == last_name.upper(),
-                cls.zip5 == zip_code[:5],
-                cls.first_name.in_(clean_first_names),
-            )
+        joined_names = [join_name(last_name, name) for name in first_names]
+        return (
+            self.all_stmt()
+            .where("name", "IN", joined_names)
+            .where("zip_code", "=", zip_code[:5])
+        )
 
-    @classmethod
     def for_last_zip_firsts(
-        cls,
-        session: sao.Session,
-        last_name: str,
-        zip_code: str,
-        first_names: t.Iterable[str],
-    ) -> t.Iterable[t.Self]:
+        self, last_name: str, zip_code: str, first_names: t.Iterable[str]
+    ) -> t.Iterable[Contribution]:
         """Return a query for contributions matching the given criteria."""
-        statement = cls.for_last_zip_firsts_stmt(last_name, zip_code, first_names)
-        # print(str(statement), last_name, zip_code, first_names)
-        return session.execute(statement).scalars()
+        return self.execute(
+            self.for_last_zip_firsts_stmt(last_name, zip_code, first_names)
+        )
 
-    @classmethod
     def for_last_city_state_firsts_stmt(
-        cls, last_name: str, city: str, state: str, first_names: t.Iterable[str]
+        self, last_name: str, city: str, state: str, first_names: t.Iterable[str]
     ):
         """Return a select statement for contributions matching the given criteria."""
-        clean_first_names = [name.upper() for name in first_names]
-        if len(clean_first_names) == 1:
-            return sa.select(cls).where(
-                cls.last_name == last_name.upper(),
-                cls.city == city.upper(),
-                cls.state == state.upper(),
-                cls.first_name == clean_first_names[0],
-            )
-        else:
-            return sa.select(cls).where(
-                cls.last_name == last_name.upper(),
-                cls.city == city.upper(),
-                cls.state == state.upper(),
-                cls.first_name.in_(clean_first_names),
-            )
+        joined_names = [join_name(last_name, name) for name in first_names]
+        return (
+            self.all_stmt()
+            .where("name", "IN", joined_names)
+            .where("city", "=", city.upper())
+            .where("state", "=", state.upper())
+        )
 
-    @classmethod
     def for_last_city_state_firsts(
-        cls,
-        session: sao.Session,
+        self,
         last_name: str,
         city: str,
         state: str,
         first_names: t.Iterable[str],
-    ) -> t.Iterable[t.Self]:
+    ) -> t.Iterable[Contribution]:
         """Return a query for contributions matching the given criteria."""
-        statement = cls.for_last_city_state_firsts_stmt(
-            last_name, city, state, first_names
+        return self.execute(
+            self.for_last_city_state_firsts_stmt(last_name, city, state, first_names)
         )
-        # print(str(statement), last_name, city, state, first_names)
-        return session.execute(statement).scalars()
 
-    @classmethod
-    def from_contribution_row(cls, row: t.Sequence[str]) -> t.Self | None:
+    def get_model_instance(self, row: t.Any) -> Contribution | None:
         """Insert a contribution from a row of the contributions file."""
-        sub_id = row[ContributionColumns.SUB_ID].strip()
+        sub_id = (str(row.sub_id) or "").strip()
         if not sub_id:
             return None
-        committee_id = row[ContributionColumns.COMMITTEE_ID].strip()
+        committee_id = (row.cmte_id or "").strip()
         if not committee_id:
             return None
-        entity_type = row[ContributionColumns.ENTITY_TYPE].strip()
+        entity_type = (row.entity_tp or "").strip()
         if entity_type != EntityTypeCode.INDIVIDUAL:
             return None
-        name = row[ContributionColumns.NAME].strip()
+        name = (row.name or "").strip()
         if "," not in name:
             return None
-        last_name, first_name = split_name(name)
-        city = row[ContributionColumns.CITY].strip()
+        city = (row.city or "").strip()
         if not city:
             return None
-        state = row[ContributionColumns.STATE].strip()
+        state = (row.state or "").strip()
         if not state:
             return None
-        zip_code = row[ContributionColumns.ZIP_CODE].strip()
+        zip_code = (row.zip_code or "").strip()
         if len(zip_code) not in {5, 9}:
             return None
-        amount = row[ContributionColumns.TRANSACTION_AMOUNT].strip()
+        amount_str = (str(row.transaction_amt) or "").strip()
         try:
-            amount_cents = int(Decimal(amount) * 100)
+            amount = Decimal(amount_str)
         except Exception:
             return None
-        return cls(
+        committee = self._committee_table.get_model_instance(row)
+        if committee is None:
+            return None
+        return Contribution(
             id=sub_id,
-            committee_id=committee_id,
-            last_name=last_name,
-            first_name=first_name,
+            committee=committee,
+            name=name,
             city=city,
             state=state,
-            zip5=zip_code[:5],
             zip_code=zip_code,
-            amount_cents=amount_cents,
+            amount=amount,
         )
-
-    @classmethod
-    def from_csv_io(
-        cls,
-        text_io: t.TextIO,
-    ) -> t.Iterable[t.Self]:
-        """Create a contributions manager from a FEC individual contributions file."""
-        # Turns out this is not simply a CSV with a pipe delimiter. I think it comes
-        # down to escaping quotes, but I'm not sure. So we'll just split on pipes.
-        rows = (row.strip().split("|") for row in text_io)
-        return (
-            contribution
-            for row in rows
-            if (contribution := cls.from_contribution_row(row)) is not None
-        )
-
-    @classmethod
-    def from_path(
-        cls,
-        path: pathlib.Path,
-    ) -> t.Iterable[t.Self]:
-        """Create a contributions manager from a FEC individual contributions file."""
-        path = validate_extant_file(path)
-        with path.open() as file:
-            yield from cls.from_csv_io(file)
-
-    @classmethod
-    def from_data_manager(
-        cls,
-        data_manager: DataManager,
-        year: int = 2020,
-    ) -> t.Iterable[t.Self]:
-        """Create a contributions manager from a FEC individual contributions file."""
-        return cls.from_path(data_manager.path / "fec" / f"individual-{year}.txt")
-
-    def to_data(self) -> dict[str, str | int]:
-        """Return a dictionary representation of this contribution."""
-        return {
-            "id": self.id,
-            "committee_id": self.committee_id,
-            "committee_name": self.committee.name,
-            "committee_party": self.committee.adjusted_party,
-            "last_name": self.last_name,
-            "first_name": self.first_name,
-            "city": self.city,
-            "state": self.state,
-            "zip5": self.zip5,
-            "zip_code": self.zip_code,
-            "amount_cents": self.amount_cents,
-            "amount_fmt": fmt_usd(self.amount_cents),
-        }
-
-
-def is_extant_db(data_manager: DataManager, state: str) -> bool:
-    """Return whether or not a database exists for the given data manager."""
-    path = data_manager.path / "db" / f"{state}.db"
-    return is_extant_file(path)
-
-
-def validate_extant_db(data_manager: DataManager, state: str) -> None:
-    """Validate the existence of a database for the given data manager."""
-    path = data_manager.path / "db" / f"{state}.db"
-    validate_extant_file(path)
-
-
-def get_engine(data_manager: DataManager, state: str) -> sa.Engine:
-    """Return an engine for the given data manager."""
-    return sa.create_engine(
-        f"sqlite:///{data_manager.path / 'db' / f'{state}.db'}",
-    )
-
-
-def create_db_tables(engine: sa.Engine) -> None:
-    """Create the database tables for the given engine."""
-    BaseModel.metadata.create_all(engine)

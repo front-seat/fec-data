@@ -11,6 +11,7 @@ from server.data.contacts.abbu import ZipABBUManager
 from server.data.contacts.google import GoogleContactExportManager
 from server.data.manager import DataManager
 from server.data.search import ContactContributionSearcher
+from server.utils.bq import get_client
 
 
 @get("/")
@@ -52,7 +53,8 @@ async def search(
             if is_zip
             else GoogleContactExportManager(temp.name)
         )
-        searcher = ContactContributionSearcher(data_manager)
+        bq_client = get_client()
+        searcher = ContactContributionSearcher(bq_client, "2020", data_manager)
         results = list(searcher.search_and_summarize_contacts(contact_manager))
         return {
             "ok": True,
