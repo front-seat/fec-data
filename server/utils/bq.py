@@ -127,7 +127,6 @@ class BQClient(bigquery.Client):
     def execute(self, statement: Statement):
         """Execute the query."""
         query = statement.build_query()
-        # print("EXECUTING: ", query, "WITH PARAMS: ", statement.params)
         job_config = statement.build_query_job_config()
         job = self.query(query, job_config=job_config)
         return job.result()

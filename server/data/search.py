@@ -1,5 +1,5 @@
 import datetime
-import typing as t
+from concurrent.futures import ThreadPoolExecutor
 
 from server.data.contacts import Contact, IContactProvider
 from server.data.manager import DataManager
@@ -34,6 +34,8 @@ class ContactContributionSearcher:
         self, contact: Contact
     ) -> tuple[Contact, ContributionSummary] | None:
         """Search for a contact and summarize their contributions."""
+        # LOGGING
+        # print(f"Searching for {contact}")
         for alternative in self._alternatives_helper.get_alternatives(contact):
             if alternative.duplicate_key in self._seen:
                 continue
@@ -48,9 +50,12 @@ class ContactContributionSearcher:
 
     def search_and_summarize_contacts(
         self, contacts: IContactProvider
-    ) -> t.Iterable[tuple[Contact, ContributionSummary]]:
+    ) -> list[tuple[Contact, ContributionSummary]]:
         """Search for contacts and summarize their contributions."""
-        for contact in contacts.get_contacts():
-            result = self.search_and_summarize(contact)
-            if result is not None:
-                yield result
+        contact_list = list(contacts.get_contacts())
+        with ThreadPoolExecutor() as executor:
+            results = []
+            for result in executor.map(self.search_and_summarize, contact_list):
+                if result is not None:
+                    results.append(result)
+        return results

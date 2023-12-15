@@ -176,9 +176,7 @@ class ContributionSummaryManager:
                 contact.last_name, contact.zip5, related_name_set
             )
 
-    def _summaries_for_contact(
-        self, contact: Contact
-    ) -> t.Iterable[ContributionSummary]:
+    def _summaries_for_contact(self, contact: Contact) -> list[ContributionSummary]:
         """Return all possible contribution summaries for a contact."""
         related_name_sets = list(
             self._names_provider.get_related_names(contact.first_name)
@@ -186,11 +184,13 @@ class ContributionSummaryManager:
         # No related names? Just use the first name.
         if not related_name_sets:
             related_name_sets = [frozenset([contact.first_name])]
+        summaries = []
         for related_name_set in related_name_sets:
             contributions = self._contributions(contact, related_name_set)
             summary = ContributionSummary(contributions)
             if summary.total > 0:
-                yield summary
+                summaries.append(summary)
+        return summaries
 
     def preferred_summary_for_contact(
         self, contact: Contact
@@ -200,9 +200,11 @@ class ContributionSummaryManager:
         try_contacts = [contact]
         if contact.has_zip:
             try_contacts.append(contact.without_zip())
-        summaries: list[ContributionSummary] = []
+
+        summaries = []
         for try_contact in try_contacts:
-            summaries.extend(list(self._summaries_for_contact(try_contact)))
+            summaries.extend(self._summaries_for_contact(try_contact))
+
         if not summaries:
             return None
         return max(summaries, key=lambda s: s.total)
