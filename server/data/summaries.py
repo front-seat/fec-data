@@ -25,6 +25,11 @@ class ContributionSummary:
         ]
 
     @property
+    def contributions(self) -> t.Iterable[Contribution]:
+        """The contributions that make up the summary."""
+        return self._contributions
+
+    @property
     def total_cents(self) -> int:
         """The total amount of all contributions, in cents."""
         return sum(contribution.amount_cents for contribution in self._contributions)
@@ -72,6 +77,17 @@ class ContributionSummary:
             contribution.amount_cents
             for contribution in self._contributions
             if contribution.committee.adjusted_party == party
+        )
+
+    def party_total_cents_anything_but(self, parties: set[str]) -> int:
+        """
+        Return the total amount of contributions for everything
+        but the named parties.
+        """
+        return sum(
+            contribution.amount_cents
+            for contribution in self._contributions
+            if contribution.committee.adjusted_party not in parties
         )
 
     def party_total_fmt(self, party: str) -> str:

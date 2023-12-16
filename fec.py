@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # ruff: noqa: E501
 
+import csv
 import json
+import typing as t
 
 import click
 import sqlalchemy.orm as sao
@@ -20,6 +22,7 @@ from server.data.models import (
 )
 from server.data.nicknames import NicknamesManager
 from server.data.search import ContactContributionSearcher
+from server.data.summaries import ContributionSummary
 
 
 @click.group()
@@ -262,7 +265,14 @@ def contributions():
     required=False,
     default=None,
 )
-def search(
+@click.option(
+    "--emit",
+    type=str,
+    required=False,
+    default="human",
+    help="Output format. One of: human, csv-overview, csv-contributions",
+)
+def search(  # noqa: C901
     first_name: str | None = None,
     last_name: str | None = None,
     zip_code: str | None = None,
@@ -273,6 +283,7 @@ def search(
     contact_zip: str | None = None,
     google: str | None = None,
     linkedin: str | None = None,
+    emit: str = "human",
 ):
     """Search summarized FEC contributions data."""
     data_manager = DataManager(data) if data is not None else DataManager.default()
@@ -304,13 +315,95 @@ def search(
             "You must provide a contact dir, zip file, or explicit name & zip."
         )
 
-    for contact, summary in searcher.search_and_summarize_contacts(contact_provider):
-        assert contact.city
-        assert contact.state
-        print(
-            f"{contact.first_name.title()} {contact.last_name.title()} ({contact.city.title()}, {contact.state})"
-        )
-        print(str(summary))
+    def _emit_overview_csv(summaries: t.Iterable[tuple[Contact, ContributionSummary]]):
+        """Emit a CSV overview of the search results."""
+        fieldnames = [
+            "last_name",
+            "first_name",
+            "city",
+            "state",
+            "zip",
+            "total_usd",
+            "dem_usd",
+            "rep_usd",
+            "other_usd",
+            "donated_to",
+        ]
+        writer = csv.DictWriter(click.get_text_stream("stdout"), fieldnames=fieldnames)
+        writer.writeheader()
+        for contact, summary in summaries:
+            writer.writerow(
+                {
+                    "first_name": contact.first_name.title(),
+                    "last_name": contact.last_name.title(),
+                    "city": (contact.city or "").title(),
+                    "state": contact.state,
+                    "zip": contact.zip_code,
+                    "total_usd": summary.total_cents / 100,
+                    "dem_usd": summary.party_total_cents("DEM") / 100,
+                    "rep_usd": summary.party_total_cents("REP") / 100,
+                    "other_usd": summary.party_total_cents("OTH") / 100,
+                    "donated_to": "/".join(
+                        sorted(c.name for c in summary.committees())
+                    ),
+                }
+            )
+
+    def _emit_contributions_csv(
+        summaries: t.Iterable[tuple[Contact, ContributionSummary]]
+    ):
+        """Emit a detailed CSV with line-by-line transactions."""
+        fieldnames = [
+            "last_name",
+            "first_name",
+            "city",
+            "state",
+            "zip",
+            "fec_contribution_id",
+            "fec_committee_id",
+            "committee",
+            "party",
+            "amount_usd",
+        ]
+        writer = csv.DictWriter(click.get_text_stream("stdout"), fieldnames=fieldnames)
+        writer.writeheader()
+        for contact, summary in summaries:
+            for contribution in summary.contributions:
+                writer.writerow(
+                    {
+                        "first_name": contact.first_name.title(),
+                        "last_name": contact.last_name.title(),
+                        "city": (contact.city or "").title(),
+                        "state": contact.state,
+                        "zip": contact.zip_code,
+                        "fec_contribution_id": contribution.id,
+                        "fec_committee_id": contribution.committee_id,
+                        "committee": contribution.committee.name,
+                        "party": contribution.committee.party,
+                        "amount_usd": contribution.amount_cents / 100,
+                    }
+                )
+
+    def _emit_human(summaries: t.Iterable[tuple[Contact, ContributionSummary]]):
+        for contact, summary in summaries:
+            print(
+                f"{contact.first_name.title()} {contact.last_name.title()} ({(contact.city or '').title()}, {contact.state})"
+            )
+            print(str(summary))
+
+    summaries = searcher.search_and_summarize_contacts(contact_provider)
+    sorted_summaries = sorted(
+        summaries,
+        key=lambda contact_summary: contact_summary[0].last_name.upper(),
+    )
+    if emit == "human":
+        _emit_human(sorted_summaries)
+    elif emit == "csv-overview":
+        _emit_overview_csv(sorted_summaries)
+    elif emit == "csv-contributions":
+        _emit_contributions_csv(sorted_summaries)
+    else:
+        raise click.UsageError(f"Unknown emit format: {emit}")
 
 
 if __name__ == "__main__":
