@@ -179,6 +179,8 @@ class Contribution(BaseModel):
     state: sao.Mapped[str] = sao.mapped_column(sa.String(2), nullable=False)
     zip5: sao.Mapped[str] = sao.mapped_column(sa.String(5), nullable=False)
     zip_code: sao.Mapped[str] = sao.mapped_column(sa.String(9), nullable=False)
+    employer: sao.Mapped[str] = sao.mapped_column(sa.String(38), nullable=False)
+    occupation: sao.Mapped[str] = sao.mapped_column(sa.String(38), nullable=False)
     amount_cents: sao.Mapped[int] = sao.mapped_column(sa.Integer, nullable=False)
 
     # We need to create indexes on the columns we'll be querying on.
@@ -291,6 +293,8 @@ class Contribution(BaseModel):
             dt = datetime.datetime.strptime(transaction_dt, "%m%d%Y").date()
         except Exception:
             return None
+        employer = row[ContributionColumns.EMPLOYER].strip().title() or ""
+        occupation = row[ContributionColumns.OCCUPATION].strip().title() or ""
         return cls(
             id=sub_id,
             dt=dt,
@@ -302,6 +306,8 @@ class Contribution(BaseModel):
             zip5=zip_code[:5],
             zip_code=zip_code,
             amount_cents=amount_cents,
+            employer=employer,
+            occupation=occupation,
         )
 
     @classmethod
@@ -353,6 +359,8 @@ class Contribution(BaseModel):
             "zip_code": self.zip_code,
             "amount_cents": self.amount_cents,
             "amount_fmt": fmt_usd(self.amount_cents),
+            "employer": self.employer,
+            "occupation": self.occupation,
         }
 
 

@@ -330,7 +330,7 @@ def search(  # noqa: C901
             "total_usd",
             "dem_usd",
             "rep_usd",
-            "other_usd",
+            "unset_usd",
             "donated_to",
         ]
         writer = csv.DictWriter(out, fieldnames=fieldnames)
@@ -346,7 +346,7 @@ def search(  # noqa: C901
                     "total_usd": summary.total_cents / 100,
                     "dem_usd": summary.party_total_cents("DEM") / 100,
                     "rep_usd": summary.party_total_cents("REP") / 100,
-                    "other_usd": summary.party_total_cents("OTH") / 100,
+                    "unset_usd": summary.party_total_cents(None) / 100,
                     "donated_to": "/".join(
                         sorted(c.name for c in summary.committees())
                     ),
@@ -363,6 +363,7 @@ def search(  # noqa: C901
             "city",
             "state",
             "zip",
+            "dt",
             "fec_contribution_id",
             "fec_committee_id",
             "committee",
@@ -380,10 +381,11 @@ def search(  # noqa: C901
                         "city": (contact.city or "").title(),
                         "state": contact.state,
                         "zip": contact.zip_code,
+                        "dt": contribution.dt.strftime("%m/%d/%Y"),
                         "fec_contribution_id": contribution.id,
                         "fec_committee_id": contribution.committee_id,
                         "committee": contribution.committee.name,
-                        "party": contribution.committee.party,
+                        "party": contribution.committee.party or "",
                         "amount_usd": contribution.amount_cents / 100,
                     }
                 )
