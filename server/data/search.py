@@ -50,6 +50,7 @@ class ContactContributionSearcher:
 
             summary = manager.preferred_summary_for_contact(alternative)
             if summary is not None:
+                self._seen.add(alternative.duplicate_key)
                 return (alternative, summary)
         return None
 
