@@ -62,16 +62,17 @@ class ContributionSummary:
         """Return the % of contributions for a committee."""
         return self.committee_total_cents(committee) / self.total_cents
 
-    def parties(self) -> t.Iterable[str]:
+    def parties(self) -> t.Iterable[str | None]:
         """Return the parties that received contributions."""
         return sorted(
             {
                 contribution.committee.adjusted_party
                 for contribution in self._contributions
-            }
+            },
+            key=lambda p: p or "",
         )
 
-    def party_total_cents(self, party: str) -> int:
+    def party_total_cents(self, party: str | None) -> int:
         """Return the total amount of contributions for a party."""
         return sum(
             contribution.amount_cents
@@ -90,11 +91,11 @@ class ContributionSummary:
             if contribution.committee.adjusted_party not in parties
         )
 
-    def party_total_fmt(self, party: str) -> str:
+    def party_total_fmt(self, party: str | None) -> str:
         """Return the total amount of contributions for a party, formatted."""
         return fmt_usd(self.party_total_cents(party))
 
-    def party_percent(self, party: str) -> float:
+    def party_percent(self, party: str | None) -> float:
         """Return the % of contributions for a party."""
         return self.party_total_cents(party) / self.total_cents
 

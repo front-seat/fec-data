@@ -1,3 +1,4 @@
+import datetime
 import pathlib
 import typing as t
 from decimal import Decimal
@@ -81,7 +82,9 @@ class Committee(BaseModel):
     name: sao.Mapped[str] = sao.mapped_column(
         sa.String(128), nullable=False, index=True
     )
-    party: sao.Mapped[str] = sao.mapped_column(sa.String(3), nullable=False)
+    party: sao.Mapped[str | None] = sao.mapped_column(
+        sa.String(3), nullable=True, default=None
+    )
     candidate_id: sao.Mapped[str] = sao.mapped_column(sa.String(18), nullable=True)
 
     @classmethod
@@ -90,7 +93,7 @@ class Committee(BaseModel):
         return cls(
             id=row[CommitteeColumns.ID].strip(),
             name=row[CommitteeColumns.NAME].strip().upper(),
-            party=row[CommitteeColumns.PARTY].strip().upper() or Party.UNKNOWN,
+            party=row[CommitteeColumns.PARTY].strip().upper() or None,
             candidate_id=row[CommitteeColumns.CANDIDATE_ID].strip() or None,
         )
 
@@ -138,7 +141,7 @@ class Committee(BaseModel):
         return session.execute(statement).scalars()
 
     @property
-    def adjusted_party(self) -> str:
+    def adjusted_party(self) -> str | None:
         """
         Return the FEC reported party, except in a few key cases,
         where we know better.
@@ -147,7 +150,7 @@ class Committee(BaseModel):
             return Party.DEMOCRAT
         return self.party
 
-    def to_data(self) -> dict[str, str]:
+    def to_data(self) -> dict[str, str | None]:
         """Return a dictionary representation of this committee."""
         return {
             "id": self.id,
@@ -163,6 +166,9 @@ class Contribution(BaseModel):
     __tablename__ = "contributions"
 
     id: sao.Mapped[str] = sao.mapped_column(sa.String(18), primary_key=True)
+    dt: sao.Mapped[datetime.date] = sao.mapped_column(
+        sa.Date, nullable=False, index=True
+    )
     committee_id: sao.Mapped[str] = sao.mapped_column(
         sa.String(18), sa.ForeignKey("committees.id"), nullable=False
     )
@@ -280,8 +286,14 @@ class Contribution(BaseModel):
             amount_cents = int(Decimal(amount) * 100)
         except Exception:
             return None
+        transaction_dt = row[ContributionColumns.TRANSACTION_DATE].strip()
+        try:
+            dt = datetime.datetime.strptime(transaction_dt, "%m%d%Y").date()
+        except Exception:
+            return None
         return cls(
             id=sub_id,
+            dt=dt,
             committee_id=committee_id,
             last_name=last_name,
             first_name=first_name,
@@ -326,7 +338,7 @@ class Contribution(BaseModel):
         """Create a contributions manager from a FEC individual contributions file."""
         return cls.from_path(data_manager.path / "fec" / f"individual-{year}.txt")
 
-    def to_data(self) -> dict[str, str | int]:
+    def to_data(self) -> dict[str, str | int | None]:
         """Return a dictionary representation of this contribution."""
         return {
             "id": self.id,
