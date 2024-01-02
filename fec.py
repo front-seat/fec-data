@@ -2,10 +2,12 @@
 # ruff: noqa: E501
 
 import csv
+import io
 import json
 import typing as t
 
 import click
+import pandas as pd
 import sqlalchemy.orm as sao
 from tqdm import tqdm
 
@@ -270,7 +272,7 @@ def contributions():
     type=str,
     required=False,
     default="human",
-    help="Output format. One of: human, csv-overview, csv-contributions",
+    help="Output format. One of: human, csv-overview, csv-contributions, xlsx-overview, xlsx-contributions",
 )
 def search(  # noqa: C901
     first_name: str | None = None,
@@ -315,7 +317,9 @@ def search(  # noqa: C901
             "You must provide a contact dir, zip file, or explicit name & zip."
         )
 
-    def _emit_overview_csv(summaries: t.Iterable[tuple[Contact, ContributionSummary]]):
+    def _emit_overview_csv(
+        out: t.TextIO, summaries: t.Iterable[tuple[Contact, ContributionSummary]]
+    ):
         """Emit a CSV overview of the search results."""
         fieldnames = [
             "last_name",
@@ -329,7 +333,7 @@ def search(  # noqa: C901
             "other_usd",
             "donated_to",
         ]
-        writer = csv.DictWriter(click.get_text_stream("stdout"), fieldnames=fieldnames)
+        writer = csv.DictWriter(out, fieldnames=fieldnames)
         writer.writeheader()
         for contact, summary in summaries:
             writer.writerow(
@@ -350,7 +354,7 @@ def search(  # noqa: C901
             )
 
     def _emit_contributions_csv(
-        summaries: t.Iterable[tuple[Contact, ContributionSummary]]
+        out: t.TextIO, summaries: t.Iterable[tuple[Contact, ContributionSummary]]
     ):
         """Emit a detailed CSV with line-by-line transactions."""
         fieldnames = [
@@ -365,7 +369,7 @@ def search(  # noqa: C901
             "party",
             "amount_usd",
         ]
-        writer = csv.DictWriter(click.get_text_stream("stdout"), fieldnames=fieldnames)
+        writer = csv.DictWriter(out, fieldnames=fieldnames)
         writer.writeheader()
         for contact, summary in summaries:
             for contribution in summary.contributions:
@@ -391,6 +395,29 @@ def search(  # noqa: C901
             )
             print(str(summary))
 
+    def _wrap_emit(xlsx: bool, emit_fn: t.Callable):
+        """Wrap an emit function to emit to XLSX."""
+
+        def _emit(summaries: t.Iterable[t.Any]):
+            if xlsx:
+                csv_out = io.StringIO(newline="")
+            else:
+                csv_out = click.get_text_stream("stdout")
+            emit_fn(csv_out, summaries)
+            if xlsx:
+                csv_out.seek(0)
+                df = pd.read_csv(csv_out)
+                # Make sure fec_contribution_id and fec_committee_id are treated as strings.
+                try:
+                    df["fec_contribution_id"] = df["fec_contribution_id"].astype(str)
+                    df["fec_committee_id"] = df["fec_committee_id"].astype(str)
+                except KeyError:
+                    pass
+                xlsx_out = click.get_binary_stream("stdout")
+                df.to_excel(xlsx_out, index=False)
+
+        return _emit
+
     summaries = searcher.search_and_summarize_contacts(contact_provider)
     sorted_summaries = sorted(
         summaries,
@@ -398,10 +425,12 @@ def search(  # noqa: C901
     )
     if emit == "human":
         _emit_human(sorted_summaries)
-    elif emit == "csv-overview":
-        _emit_overview_csv(sorted_summaries)
-    elif emit == "csv-contributions":
-        _emit_contributions_csv(sorted_summaries)
+    elif emit == "csv-overview" or emit == "xlsx-overview":
+        _wrap_emit(emit == "xlsx-overview", _emit_overview_csv)(sorted_summaries)
+    elif emit == "csv-contributions" or emit == "xlsx-contributions":
+        _wrap_emit(emit == "xlsx-contributions", _emit_contributions_csv)(
+            sorted_summaries
+        )
     else:
         raise click.UsageError(f"Unknown emit format: {emit}")
 
