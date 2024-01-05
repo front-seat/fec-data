@@ -190,6 +190,23 @@ class Contribution(BaseModel):
     )
 
     @classmethod
+    def for_zip_stmt(cls, zip_code: str) -> sa.sql.Select:
+        """Return a select statement for contributions matching the given criteria."""
+        return sa.select(cls).where(
+            cls.zip5 == zip_code[:5],
+        )
+
+    @classmethod
+    def for_zip(
+        cls,
+        session: sao.Session,
+        zip_code: str,
+    ) -> t.Iterable[t.Self]:
+        """Return a query for contributions matching the given criteria."""
+        statement = cls.for_zip_stmt(zip_code)
+        return session.execute(statement).scalars()
+
+    @classmethod
     def for_last_zip_firsts_stmt(
         cls, last_name: str, zip_code: str, first_names: t.Iterable[str]
     ):
@@ -362,6 +379,19 @@ class Contribution(BaseModel):
             "employer": self.employer,
             "occupation": self.occupation,
         }
+
+    def contact(self):
+        """Return a contact for this contribution."""
+        from server.data.contacts import Contact
+
+        return Contact(
+            first_name=self.first_name,
+            last_name=self.last_name,
+            city=self.city,
+            state=self.state,
+            zip_code=self.zip_code,
+            phone=None,
+        )
 
 
 def is_extant_db(data_manager: DataManager, state: str) -> bool:

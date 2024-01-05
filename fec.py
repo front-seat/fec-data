@@ -222,6 +222,111 @@ def contributions():
     pass
 
 
+def _emit_overview_csv(
+    out: t.TextIO, summaries: t.Iterable[tuple[Contact, ContributionSummary]]
+):
+    """Emit a CSV overview of the search results."""
+    fieldnames = [
+        "last_name",
+        "first_name",
+        "city",
+        "state",
+        "zip",
+        "total_usd",
+        "dem_usd",
+        "rep_usd",
+        "unset_usd",
+        "donated_to",
+    ]
+    writer = csv.DictWriter(out, fieldnames=fieldnames)
+    writer.writeheader()
+    for contact, summary in summaries:
+        writer.writerow(
+            {
+                "first_name": contact.first_name.title(),
+                "last_name": contact.last_name.title(),
+                "city": (contact.city or "").title(),
+                "state": contact.state,
+                "zip": contact.zip_code,
+                "total_usd": summary.total_cents / 100,
+                "dem_usd": summary.party_total_cents("DEM") / 100,
+                "rep_usd": summary.party_total_cents("REP") / 100,
+                "unset_usd": summary.party_total_cents(None) / 100,
+                "donated_to": "/".join(sorted(c.name for c in summary.committees())),
+            }
+        )
+
+
+def _emit_contributions_csv(
+    out: t.TextIO, summaries: t.Iterable[tuple[Contact, ContributionSummary]]
+):
+    """Emit a detailed CSV with line-by-line transactions."""
+    fieldnames = [
+        "last_name",
+        "first_name",
+        "city",
+        "state",
+        "zip",
+        "dt",
+        "fec_contribution_id",
+        "fec_committee_id",
+        "committee",
+        "party",
+        "amount_usd",
+    ]
+    writer = csv.DictWriter(out, fieldnames=fieldnames)
+    writer.writeheader()
+    for contact, summary in summaries:
+        for contribution in summary.contributions:
+            writer.writerow(
+                {
+                    "first_name": contact.first_name.title(),
+                    "last_name": contact.last_name.title(),
+                    "city": (contact.city or "").title(),
+                    "state": contact.state,
+                    "zip": contact.zip_code,
+                    "dt": contribution.dt.strftime("%m/%d/%Y"),
+                    "fec_contribution_id": contribution.id,
+                    "fec_committee_id": contribution.committee_id,
+                    "committee": contribution.committee.name,
+                    "party": contribution.committee.party or "",
+                    "amount_usd": contribution.amount_cents / 100,
+                }
+            )
+
+
+def _emit_human(summaries: t.Iterable[tuple[Contact, ContributionSummary]]):
+    for contact, summary in summaries:
+        print(
+            f"{contact.first_name.title()} {contact.last_name.title()} ({(contact.city or '').title()}, {contact.state} {contact.zip5})"
+        )
+        print(str(summary))
+
+
+def _wrap_emit(xlsx: bool, emit_fn: t.Callable):
+    """Wrap an emit function to emit to XLSX."""
+
+    def _emit(summaries: t.Iterable[t.Any]):
+        if xlsx:
+            csv_out = io.StringIO(newline="")
+        else:
+            csv_out = click.get_text_stream("stdout")
+        emit_fn(csv_out, summaries)
+        if xlsx:
+            csv_out.seek(0)
+            df = pd.read_csv(csv_out)
+            # Make sure fec_contribution_id and fec_committee_id are treated as strings.
+            try:
+                df["fec_contribution_id"] = df["fec_contribution_id"].astype(str)
+                df["fec_committee_id"] = df["fec_committee_id"].astype(str)
+            except KeyError:
+                pass
+            xlsx_out = click.get_binary_stream("stdout")
+            df.to_excel(xlsx_out, index=False)
+
+    return _emit
+
+
 @contributions.command()
 @click.argument("first_name", required=False, default=None)
 @click.argument("last_name", required=False, default=None)
@@ -274,7 +379,7 @@ def contributions():
     default="human",
     help="Output format. One of: human, csv-overview, csv-contributions, xlsx-overview, xlsx-contributions",
 )
-def search(  # noqa: C901
+def search(
     first_name: str | None = None,
     last_name: str | None = None,
     zip_code: str | None = None,
@@ -317,109 +422,6 @@ def search(  # noqa: C901
             "You must provide a contact dir, zip file, or explicit name & zip."
         )
 
-    def _emit_overview_csv(
-        out: t.TextIO, summaries: t.Iterable[tuple[Contact, ContributionSummary]]
-    ):
-        """Emit a CSV overview of the search results."""
-        fieldnames = [
-            "last_name",
-            "first_name",
-            "city",
-            "state",
-            "zip",
-            "total_usd",
-            "dem_usd",
-            "rep_usd",
-            "unset_usd",
-            "donated_to",
-        ]
-        writer = csv.DictWriter(out, fieldnames=fieldnames)
-        writer.writeheader()
-        for contact, summary in summaries:
-            writer.writerow(
-                {
-                    "first_name": contact.first_name.title(),
-                    "last_name": contact.last_name.title(),
-                    "city": (contact.city or "").title(),
-                    "state": contact.state,
-                    "zip": contact.zip_code,
-                    "total_usd": summary.total_cents / 100,
-                    "dem_usd": summary.party_total_cents("DEM") / 100,
-                    "rep_usd": summary.party_total_cents("REP") / 100,
-                    "unset_usd": summary.party_total_cents(None) / 100,
-                    "donated_to": "/".join(
-                        sorted(c.name for c in summary.committees())
-                    ),
-                }
-            )
-
-    def _emit_contributions_csv(
-        out: t.TextIO, summaries: t.Iterable[tuple[Contact, ContributionSummary]]
-    ):
-        """Emit a detailed CSV with line-by-line transactions."""
-        fieldnames = [
-            "last_name",
-            "first_name",
-            "city",
-            "state",
-            "zip",
-            "dt",
-            "fec_contribution_id",
-            "fec_committee_id",
-            "committee",
-            "party",
-            "amount_usd",
-        ]
-        writer = csv.DictWriter(out, fieldnames=fieldnames)
-        writer.writeheader()
-        for contact, summary in summaries:
-            for contribution in summary.contributions:
-                writer.writerow(
-                    {
-                        "first_name": contact.first_name.title(),
-                        "last_name": contact.last_name.title(),
-                        "city": (contact.city or "").title(),
-                        "state": contact.state,
-                        "zip": contact.zip_code,
-                        "dt": contribution.dt.strftime("%m/%d/%Y"),
-                        "fec_contribution_id": contribution.id,
-                        "fec_committee_id": contribution.committee_id,
-                        "committee": contribution.committee.name,
-                        "party": contribution.committee.party or "",
-                        "amount_usd": contribution.amount_cents / 100,
-                    }
-                )
-
-    def _emit_human(summaries: t.Iterable[tuple[Contact, ContributionSummary]]):
-        for contact, summary in summaries:
-            print(
-                f"{contact.first_name.title()} {contact.last_name.title()} ({(contact.city or '').title()}, {contact.state})"
-            )
-            print(str(summary))
-
-    def _wrap_emit(xlsx: bool, emit_fn: t.Callable):
-        """Wrap an emit function to emit to XLSX."""
-
-        def _emit(summaries: t.Iterable[t.Any]):
-            if xlsx:
-                csv_out = io.StringIO(newline="")
-            else:
-                csv_out = click.get_text_stream("stdout")
-            emit_fn(csv_out, summaries)
-            if xlsx:
-                csv_out.seek(0)
-                df = pd.read_csv(csv_out)
-                # Make sure fec_contribution_id and fec_committee_id are treated as strings.
-                try:
-                    df["fec_contribution_id"] = df["fec_contribution_id"].astype(str)
-                    df["fec_committee_id"] = df["fec_committee_id"].astype(str)
-                except KeyError:
-                    pass
-                xlsx_out = click.get_binary_stream("stdout")
-                df.to_excel(xlsx_out, index=False)
-
-        return _emit
-
     summaries = searcher.search_and_summarize_contacts(contact_provider)
     sorted_summaries = sorted(
         summaries,
@@ -446,9 +448,9 @@ def search(  # noqa: C901
     default=None,
 )
 @click.option(
-    "--campaign",
+    "--committee",
     type=str,
-    help="Campaign name.",
+    help="Committee name.",
     required=False,
     default=None,
 )
@@ -459,18 +461,93 @@ def search(  # noqa: C901
     required=False,
     default=None,
 )
-def group_by_zip(zip: str, data: str | None = None, campaign: str | None = None):
+@click.option(
+    "--emit",
+    type=str,
+    required=False,
+    default="human",
+    help="Output format. One of: human, csv-overview, csv-contributions, xlsx-overview, xlsx-contributions",
+)
+def group_by_zip(
+    zip: str, data: str | None = None, committee: str | None = None, emit: str = "human"
+):
     """Group contributions by zip code."""
-    # TODO dave
-    # data_manager = DataManager(data) if data is not None else DataManager.default()
-    # searcher = ContactContributionSearcher(data_manager)
-    return
+    from server.data.nicknames import NicknamesManager
+    from server.data.summaries import ContributionSummary
+    from server.data.usps import ZipCodeManager
 
-    # summaries = searcher.search_and_summarize_contacts(
-    #     SimpleContactProvider([Contact(None, None, None, None, None, zip)])
-    # )
-    # for contact, summary in summaries:
-    #     print(f"{contact.zip_code}: {summary.total_cents / 100}")
+    data_manager = DataManager(data) if data is not None else DataManager.default()
+    zip_manager = ZipCodeManager.from_data_manager(data_manager)
+    zip_details = list(zip_manager.get_details(zip.strip()))
+    assert len(zip_details) == 1
+    zip_detail = zip_details[0]
+    nicknames_manager = NicknamesManager.from_data_manager(data_manager)
+
+    def imperfect_contributor_id(contribution: Contribution) -> str:
+        """
+        Return a unique identity culled from the fields that we use to
+        find a contribution.
+        """
+        last_name = contribution.last_name.strip().lower()
+        employer = contribution.employer.strip().lower()
+        occupation = contribution.occupation.strip().lower()
+        first_name_indexes = sorted(
+            nicknames_manager._indexes_for_name.get(
+                contribution.first_name.upper().strip(), []
+            )
+        )
+        first_name_indexes_str = "-".join(str(i) for i in first_name_indexes)
+        return f"{last_name}-{first_name_indexes_str}-{employer}-{occupation}"
+
+    # Grab *all* Contributions from this zip code.
+    with sao.Session(get_engine(data_manager, zip_detail.state)) as session:
+        contributions = Contribution.for_zip(session, zip)
+
+        id_to_contributions: dict[str, list[Contribution]] = {}
+        for contribution in contributions:
+            id_to_contributions.setdefault(
+                imperfect_contributor_id(contribution), []
+            ).append(contribution)
+
+        # Now, for each contributor, sum up their contributions.
+        summaries = []
+        for contributions in id_to_contributions.values():
+            summary = ContributionSummary(contributions)
+            if summary.total_cents > 0:
+                summaries.append(summary)
+
+        # If we have a committee, filter to just those contributions.
+        if committee is not None:
+            upper_committee = committee.upper().strip()
+            summaries = [
+                summary
+                for summary in summaries
+                if any(upper_committee in c.name for c in summary.committees())
+            ]
+
+        # Order by largest total_cents.
+        summaries = sorted(summaries, key=lambda s: s.total_cents, reverse=True)
+
+        # Filter by $10k
+        summaries = [
+            summary for summary in summaries if summary.total_cents >= 1_000_000
+        ]
+
+        # Make [Contact, ContributionSummary] tuples
+        sorted_summaries = [
+            (summary.contributions[0].contact(), summary) for summary in summaries
+        ]
+
+        if emit == "human":
+            _emit_human(sorted_summaries)
+        elif emit == "csv-overview" or emit == "xlsx-overview":
+            _wrap_emit(emit == "xlsx-overview", _emit_overview_csv)(sorted_summaries)
+        elif emit == "csv-contributions" or emit == "xlsx-contributions":
+            _wrap_emit(emit == "xlsx-contributions", _emit_contributions_csv)(
+                sorted_summaries
+            )
+        else:
+            raise click.UsageError(f"Unknown emit format: {emit}")
 
 
 if __name__ == "__main__":

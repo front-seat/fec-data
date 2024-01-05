@@ -18,7 +18,7 @@ class ZipCodeDetail:
     def from_zip_code_row(cls, row: dict[str, str]) -> t.Self:
         """Create a zip code from a row of the zip code file."""
         return cls(
-            zip5=row["PHYSICAL ZIP"][:5],
+            zip5=row["DELIVERY ZIPCODE"][:5],  # XXX used to be PHYSICAL ZIP
             city=row["PHYSICAL CITY"].strip().upper(),
             state=row["PHYSICAL STATE"].strip().upper(),
         )
