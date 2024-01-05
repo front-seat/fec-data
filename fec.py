@@ -437,5 +437,41 @@ def search(  # noqa: C901
         raise click.UsageError(f"Unknown emit format: {emit}")
 
 
+@contributions.command(name="group")
+@click.option(
+    "--data",
+    type=click.Path(exists=True),
+    help="Path to data dir.",
+    required=False,
+    default=None,
+)
+@click.option(
+    "--campaign",
+    type=str,
+    help="Campaign name.",
+    required=False,
+    default=None,
+)
+@click.option(
+    "--zip",
+    type=str,
+    help="Zip code.",
+    required=False,
+    default=None,
+)
+def group_by_zip(zip: str, data: str | None = None, campaign: str | None = None):
+    """Group contributions by zip code."""
+    # TODO dave
+    # data_manager = DataManager(data) if data is not None else DataManager.default()
+    # searcher = ContactContributionSearcher(data_manager)
+    return
+
+    # summaries = searcher.search_and_summarize_contacts(
+    #     SimpleContactProvider([Contact(None, None, None, None, None, zip)])
+    # )
+    # for contact, summary in summaries:
+    #     print(f"{contact.zip_code}: {summary.total_cents / 100}")
+
+
 if __name__ == "__main__":
     fec()
