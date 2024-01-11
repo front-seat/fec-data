@@ -2,6 +2,7 @@ import abc
 import pathlib
 import plistlib
 import typing as t
+import uuid
 import zipfile
 
 from server.data.phone import normalize_e164
@@ -58,7 +59,16 @@ class ABBUManagerBase(abc.ABC, IContactProvider):
 
         except Exception:
             return None
-        return Contact(first_name, last_name, city, state, phone, zip_code)
+        import_id = str(uuid.uuid4())
+        return Contact(
+            import_id=import_id,
+            first_name=first_name,
+            last_name=last_name,
+            city=city,
+            state=state,
+            phone=phone,
+            zip_code=zip_code,
+        )
 
 
 class DirectoryABBUManager(ABBUManagerBase):

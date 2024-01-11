@@ -10,6 +10,9 @@ from server.data.phone import get_npa_id
 class Contact:
     """A contact in the address book."""
 
+    import_id: str
+    """An initial identifier that stays with the contact through its variants."""
+
     first_name: str
     last_name: str
     city: str | None
@@ -25,6 +28,7 @@ class Contact:
     def to_data(self) -> dict[str, str]:
         """Return a dictionary representation of the contact."""
         data = {
+            "import_id": self.import_id,
             "first_name": self.first_name,
             "last_name": self.last_name,
             "city": self.city,
@@ -76,15 +80,13 @@ class Contact:
         return self.npa_id is not None
 
     @property
-    def duplicate_key(self) -> tuple[str, str, str | None, str | None]:
+    def variant_id(self) -> str:
         """
         Return a 'unique enough' key for the contact.
 
         Contact keys are used to determine if two contacts are the same.
         """
-        # assert self.city
-        # assert self.state
-        return (self.first_name, self.last_name, self.city, self.state)
+        return f"{self.import_id}-{self.first_name}-{self.last_name}-{self.city}-{self.zip_code}"  # noqa: E501
 
 
 class IContactProvider(t.Protocol):

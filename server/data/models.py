@@ -380,19 +380,6 @@ class Contribution(BaseModel):
             "occupation": self.occupation,
         }
 
-    def contact(self):
-        """Return a contact for this contribution."""
-        from server.data.contacts import Contact
-
-        return Contact(
-            first_name=self.first_name,
-            last_name=self.last_name,
-            city=self.city,
-            state=self.state,
-            zip_code=self.zip_code,
-            phone=None,
-        )
-
 
 def is_extant_db(data_manager: DataManager, state: str) -> bool:
     """Return whether or not a database exists for the given data manager."""

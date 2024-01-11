@@ -87,17 +87,17 @@ class RefineContactProvider(ContactProviderWrapper):
         if contact.has_city_state:
             yield contact
             return
+        if contact.has_zip:
+            zip5 = contact.zip5
+            assert zip5
+            for city, state in self._zip_code_provider.get_city_states(zip5):
+                yield contact.with_city_state(city, state)
+            return
         if contact.has_us_phone:
             npa_id = contact.npa_id
             assert npa_id
             for area_code in self._area_code_provider.get_area_codes(npa_id):
                 if area_code.city and area_code.state:
                     yield contact.with_city_state(area_code.city, area_code.state)
-            return
-        if contact.has_zip:
-            zip5 = contact.zip5
-            assert zip5
-            for city, state in self._zip_code_provider.get_city_states(zip5):
-                yield contact.with_city_state(city, state)
             return
         yield contact

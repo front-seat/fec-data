@@ -59,7 +59,7 @@ async def search(
             "results": [
                 {
                     "contact": result[0].to_data(),
-                    "summary": result[1].to_data(),
+                    "summary": result[1].to_data() if result[1] else None,
                 }
                 for result in results
             ],

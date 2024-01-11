@@ -1,6 +1,7 @@
 import csv
 import pathlib
 import typing as t
+import uuid
 
 from server.data.phone import normalize_e164
 from server.utils.validations import validate_extant_file
@@ -34,4 +35,13 @@ class GoogleContactExportManager(IContactProvider):
                 if zip_code and len(zip_code) not in {5, 9}:
                     zip_code = None
                 phone = normalize_e164(row["Phone 1 - Value"]) or None
-                yield Contact(first_name, last_name, city, state, phone, zip_code)
+                import_id = str(uuid.uuid4())
+                yield Contact(
+                    import_id=import_id,
+                    first_name=first_name,
+                    last_name=last_name,
+                    city=city,
+                    state=state,
+                    phone=phone,
+                    zip_code=zip_code,
+                )

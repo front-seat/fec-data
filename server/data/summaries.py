@@ -8,8 +8,6 @@ from server.utils.format import fmt_usd
 from .contacts import Contact
 from .models import Committee, Contribution
 from .nicknames import INamesProvider
-from .npa import IAreaCodeProvider
-from .usps import IZipCodeProvider
 
 
 class ContributionSummary:
@@ -144,45 +142,6 @@ class ContributionSummary:
             )
 
         return "\n".join(lines)
-
-
-class AlternativeContactsHelper:
-    """Tools for finding and refining contact details."""
-
-    def __init__(
-        self, zip_code_provider: IZipCodeProvider, area_code_provider: IAreaCodeProvider
-    ):
-        self._zip_code_provider = zip_code_provider
-        self._area_code_provider = area_code_provider
-
-    def get_alternatives(
-        self,
-        contact: Contact,
-    ) -> t.Iterable[Contact]:
-        """Return useful alternative contacts for a given contact."""
-        # If the contact has a city + state, we're done.
-        if contact.has_city_state:
-            yield contact
-            return
-
-        # If the contact has a zip code, but no city + state, then we need to
-        # find the city + state from the zip code.
-        zip_code = contact.zip_code
-        if zip_code is not None:
-            for city, state in self._zip_code_provider.get_city_states(zip_code):
-                yield contact.with_city_state(city, state)
-            return
-
-        # If the contact has a US area code, but no city + state, then we need
-        # to find the city + state from the area code.
-        npa_id = contact.npa_id
-        if npa_id is not None:
-            for city, state in self._area_code_provider.get_city_states(npa_id):
-                yield contact.with_city_state(city, state)
-
-        # It's possible that no searchable alternatives for this contact exist.
-        # So be it.
-        return
 
 
 class ContributionSummaryManager:

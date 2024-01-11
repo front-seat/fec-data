@@ -1,6 +1,7 @@
 import csv
 import pathlib
 import typing as t
+import uuid
 
 from server.data.phone import normalize_e164
 from server.utils.validations import validate_extant_file
@@ -52,4 +53,13 @@ class LinkedInContactsManager(IContactProvider):
                     state = None
                 else:
                     state = state_parts[0].split(":")[1].strip().upper()
-                yield Contact(first_name, last_name, city, state, phone, zip_code)
+                import_id = str(uuid.uuid4())
+                yield Contact(
+                    import_id=import_id,
+                    first_name=first_name,
+                    last_name=last_name,
+                    city=city,
+                    state=state,
+                    phone=phone,
+                    zip_code=zip_code,
+                )

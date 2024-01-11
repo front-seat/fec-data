@@ -226,7 +226,7 @@ def contributions():
 
 
 def _emit_overview_csv(
-    out: t.TextIO, summaries: t.Iterable[tuple[Contact, ContributionSummary]]
+    out: t.TextIO, summaries: t.Iterable[tuple[Contact, ContributionSummary | None]]
 ):
     """Emit a CSV overview of the search results."""
     fieldnames = [
@@ -244,24 +244,27 @@ def _emit_overview_csv(
     writer = csv.DictWriter(out, fieldnames=fieldnames)
     writer.writeheader()
     for contact, summary in summaries:
-        writer.writerow(
-            {
-                "first_name": contact.first_name.title(),
-                "last_name": contact.last_name.title(),
-                "city": (contact.city or "").title(),
-                "state": contact.state,
-                "zip": contact.zip_code,
-                "total_usd": summary.total_cents / 100,
-                "dem_usd": summary.party_total_cents("DEM") / 100,
-                "rep_usd": summary.party_total_cents("REP") / 100,
-                "unset_usd": summary.party_total_cents(None) / 100,
-                "donated_to": "/".join(sorted(c.name for c in summary.committees())),
-            }
-        )
+        if summary:
+            writer.writerow(
+                {
+                    "first_name": contact.first_name.title(),
+                    "last_name": contact.last_name.title(),
+                    "city": (contact.city or "").title(),
+                    "state": contact.state,
+                    "zip": contact.zip_code,
+                    "total_usd": summary.total_cents / 100,
+                    "dem_usd": summary.party_total_cents("DEM") / 100,
+                    "rep_usd": summary.party_total_cents("REP") / 100,
+                    "unset_usd": summary.party_total_cents(None) / 100,
+                    "donated_to": "/".join(
+                        sorted(c.name for c in summary.committees())
+                    ),
+                }
+            )
 
 
 def _emit_contributions_csv(
-    out: t.TextIO, summaries: t.Iterable[tuple[Contact, ContributionSummary]]
+    out: t.TextIO, summaries: t.Iterable[tuple[Contact, ContributionSummary | None]]
 ):
     """Emit a detailed CSV with line-by-line transactions."""
     fieldnames = [
@@ -280,57 +283,54 @@ def _emit_contributions_csv(
     writer = csv.DictWriter(out, fieldnames=fieldnames)
     writer.writeheader()
     for contact, summary in summaries:
-        for contribution in summary.contributions:
-            writer.writerow(
-                {
-                    "first_name": contact.first_name.title(),
-                    "last_name": contact.last_name.title(),
-                    "city": (contact.city or "").title(),
-                    "state": contact.state,
-                    "zip": contact.zip_code,
-                    "dt": contribution.dt.strftime("%m/%d/%Y"),
-                    "fec_contribution_id": contribution.id,
-                    "fec_committee_id": contribution.committee_id,
-                    "committee": contribution.committee.name,
-                    "party": contribution.committee.party or "",
-                    "amount_usd": contribution.amount_cents / 100,
-                }
-            )
+        if summary:
+            for contribution in summary.contributions:
+                writer.writerow(
+                    {
+                        "first_name": contact.first_name.title(),
+                        "last_name": contact.last_name.title(),
+                        "city": (contact.city or "").title(),
+                        "state": contact.state,
+                        "zip": contact.zip_code,
+                        "dt": contribution.dt.strftime("%m/%d/%Y"),
+                        "fec_contribution_id": contribution.id,
+                        "fec_committee_id": contribution.committee_id,
+                        "committee": contribution.committee.name,
+                        "party": contribution.committee.party or "",
+                        "amount_usd": contribution.amount_cents / 100,
+                    }
+                )
 
 
-def _emit_human(summaries: t.Iterable[tuple[Contact, ContributionSummary]]):
+def _emit_human(summaries: t.Iterable[tuple[Contact, ContributionSummary | None]]):
     for contact, summary in summaries:
-        print(
-            f"{contact.first_name.title()} {contact.last_name.title()} ({(contact.city or '').title()}, {contact.state} {contact.zip5})"
-        )
-        print(str(summary))
+        if summary:
+            print(
+                f"{contact.first_name.title()} {contact.last_name.title()} ({(contact.city or '').title()}, {contact.state} {contact.zip5})"
+            )
+            print(str(summary))
 
 
 def _emit_unmatched_csv(
     out: t.TextIO,
-    contacts: t.Iterable[Contact],
+    summaries: t.Iterable[tuple[Contact, ContributionSummary | None]],
 ):
     """Emit a CSV of unmatched contacts."""
     fieldnames = ["last_name", "first_name", "city", "state", "zip", "phone"]
     writer = csv.DictWriter(out, fieldnames=fieldnames)
     writer.writeheader()
-    contacts_unique = {
-        (contact.first_name, contact.last_name): contact for contact in contacts
-    }
-    sorted_by_last_name = sorted(
-        contacts_unique.values(), key=lambda c: c.last_name.upper()
-    )
-    for contact in sorted_by_last_name:
-        writer.writerow(
-            {
-                "last_name": contact.last_name.title(),
-                "first_name": contact.first_name.title(),
-                "city": (contact.city or "").title(),
-                "state": contact.state,
-                "zip": contact.zip_code,
-                "phone": contact.phone,
-            }
-        )
+    for contact, summary in summaries:
+        if summary is None:
+            writer.writerow(
+                {
+                    "last_name": contact.last_name.title(),
+                    "first_name": contact.first_name.title(),
+                    "city": (contact.city or "").title(),
+                    "state": contact.state,
+                    "zip": contact.zip_code,
+                    "phone": contact.phone,
+                }
+            )
 
 
 def _wrap_emit(xlsx: bool, emit_fn: t.Callable):
@@ -465,12 +465,13 @@ def search(  # noqa: C901
         contact_provider = LinkedInContactsManager(linkedin)
     elif first_name and last_name and city and state:
         singleton = Contact(
-            first_name.upper(),
-            last_name.upper(),
-            city.upper(),
-            state.upper(),
-            None,
-            zip_code,
+            import_id="whatever",
+            first_name=first_name.upper(),
+            last_name=last_name.upper(),
+            city=city.upper(),
+            state=state.upper(),
+            phone=None,
+            zip_code=zip_code,
         )
         contact_provider = SimpleContactProvider([singleton])
 
@@ -500,32 +501,22 @@ def search(  # noqa: C901
             {state.upper() for state in STATES},
         )
 
+    summaries = searcher.search_and_summarize_contacts(contact_provider)
+    sorted_summaries = sorted(
+        summaries,
+        key=lambda contact_summary: contact_summary[0].last_name.upper(),
+    )
     if emit == "human":
-        summaries = searcher.search_and_summarize_contacts(contact_provider)
-        sorted_summaries = sorted(
-            summaries,
-            key=lambda contact_summary: contact_summary[0].last_name.upper(),
-        )
         _emit_human(sorted_summaries)
     elif emit == "csv-overview" or emit == "xlsx-overview":
-        summaries = searcher.search_and_summarize_contacts(contact_provider)
-        sorted_summaries = sorted(
-            summaries,
-            key=lambda contact_summary: contact_summary[0].last_name.upper(),
-        )
         _wrap_emit(emit == "xlsx-overview", _emit_overview_csv)(sorted_summaries)
     elif emit == "csv-contributions" or emit == "xlsx-contributions":
         summaries = searcher.search_and_summarize_contacts(contact_provider)
-        sorted_summaries = sorted(
-            summaries,
-            key=lambda contact_summary: contact_summary[0].last_name.upper(),
-        )
         _wrap_emit(emit == "xlsx-contributions", _emit_contributions_csv)(
             sorted_summaries
         )
     elif emit == "csv-unmatched" or emit == "xlsx-unmatched":
-        unmatched_contacts = searcher.emit_unmatched_contacts(contact_provider)
-        _wrap_emit(emit == "xlsx-unmatched", _emit_unmatched_csv)(unmatched_contacts)
+        _wrap_emit(emit == "xlsx-unmatched", _emit_unmatched_csv)(sorted_summaries)
     else:
         raise click.UsageError(f"Unknown emit format: {emit}")
 
