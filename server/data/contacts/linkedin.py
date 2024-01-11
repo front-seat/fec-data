@@ -22,13 +22,20 @@ class LinkedInContactsManager(IContactProvider):
 
     def get_contacts(self) -> t.Iterable[Contact]:
         """Return an iterator of contacts."""
+        seen_names = set()
         with open(self._path) as f:
             reader = csv.DictReader(f)
             for row in reader:
+                source = row["Source"].strip().upper()
+                if source == "GOOGLE_CONTACTS":
+                    continue
                 first_name = row["FirstName"].strip().upper() or None
                 last_name = row["LastName"].strip().upper() or None
                 if not first_name or not last_name:
                     continue
+                if (first_name, last_name) in seen_names:
+                    continue
+                seen_names.add((first_name, last_name))
                 phone_numbers = [pn.strip() for pn in row["PhoneNumbers"].split(",")]
                 if not phone_numbers:
                     phone = None

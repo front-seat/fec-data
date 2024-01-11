@@ -480,11 +480,13 @@ def search(  # noqa: C901
             "You must provide a contact dir, zip file, or explicit name & zip."
         )
 
+    # Refine all contacts, adding city/state from zip code or area code.
+    contact_provider = RefineContactProvider(
+        contact_provider, area_code_provider, zip_code_provider
+    )
+
     # Add bias.
     if bias_state is not None and bias_city:
-        contact_provider = RefineContactProvider(
-            contact_provider, area_code_provider, zip_code_provider
-        )
         contact_provider = BiasContactProvider(
             contact_provider,
             {c.upper() for c in bias_city},
@@ -492,9 +494,6 @@ def search(  # noqa: C901
         )
 
     if all_state:
-        contact_provider = RefineContactProvider(
-            contact_provider, area_code_provider, zip_code_provider
-        )
         contact_provider = BiasContactProvider(
             contact_provider,
             set(),
