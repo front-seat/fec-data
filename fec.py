@@ -15,6 +15,7 @@ from server.data.contacts import Contact, IContactProvider, SimpleContactProvide
 from server.data.contacts.abbu import DirectoryABBUManager, ZipABBUManager
 from server.data.contacts.google import GoogleContactExportManager
 from server.data.contacts.linkedin import LinkedInContactsManager
+from server.data.contacts.refine import BiasContactProvider, RefineContactProvider
 from server.data.manager import DataManager
 from server.data.models import (
     Committee,
@@ -23,8 +24,10 @@ from server.data.models import (
     get_engine,
 )
 from server.data.nicknames import NicknamesManager
+from server.data.npa import AreaCodeManager
 from server.data.search import ContactContributionSearcher
 from server.data.summaries import ContributionSummary
+from server.data.usps import STATES, ZipCodeManager
 
 
 @click.group()
@@ -303,15 +306,42 @@ def _emit_human(summaries: t.Iterable[tuple[Contact, ContributionSummary]]):
         print(str(summary))
 
 
+def _emit_unmatched_csv(
+    out: t.TextIO,
+    contacts: t.Iterable[Contact],
+):
+    """Emit a CSV of unmatched contacts."""
+    fieldnames = ["last_name", "first_name", "city", "state", "zip", "phone"]
+    writer = csv.DictWriter(out, fieldnames=fieldnames)
+    writer.writeheader()
+    contacts_unique = {
+        (contact.first_name, contact.last_name): contact for contact in contacts
+    }
+    sorted_by_last_name = sorted(
+        contacts_unique.values(), key=lambda c: c.last_name.upper()
+    )
+    for contact in sorted_by_last_name:
+        writer.writerow(
+            {
+                "last_name": contact.last_name.title(),
+                "first_name": contact.first_name.title(),
+                "city": (contact.city or "").title(),
+                "state": contact.state,
+                "zip": contact.zip_code,
+                "phone": contact.phone,
+            }
+        )
+
+
 def _wrap_emit(xlsx: bool, emit_fn: t.Callable):
     """Wrap an emit function to emit to XLSX."""
 
-    def _emit(summaries: t.Iterable[t.Any]):
+    def _emit(summaries: t.Iterable[t.Any], *args, **kwargs):
         if xlsx:
             csv_out = io.StringIO(newline="")
         else:
             csv_out = click.get_text_stream("stdout")
-        emit_fn(csv_out, summaries)
+        emit_fn(csv_out, summaries, *args, **kwargs)
         if xlsx:
             csv_out.seek(0)
             df = pd.read_csv(csv_out)
@@ -373,13 +403,35 @@ def _wrap_emit(xlsx: bool, emit_fn: t.Callable):
     default=None,
 )
 @click.option(
+    "--bias-state",
+    type=str,
+    required=False,
+    default=None,
+    help="Choose a state to bias the search towards.",
+)
+@click.option(
+    "--bias-city",
+    type=str,
+    required=False,
+    default=None,
+    multiple=True,
+    help="Choose a city to bias the search towards.",
+)
+@click.option(
     "--emit",
     type=str,
     required=False,
     default="human",
-    help="Output format. One of: human, csv-overview, csv-contributions, xlsx-overview, xlsx-contributions",
+    help="Output format. One of: human, csv-overview, csv-contributions, csv-unmatched, xlsx-overview, xlsx-contributions, xslx-unmatched",
 )
-def search(
+@click.option(
+    "--all-state",
+    required=False,
+    default=False,
+    is_flag=True,
+    help="Search all states for contacts that we don't explicitly know a state.",
+)
+def search(  # noqa: C901
     first_name: str | None = None,
     last_name: str | None = None,
     zip_code: str | None = None,
@@ -390,10 +442,15 @@ def search(
     contact_zip: str | None = None,
     google: str | None = None,
     linkedin: str | None = None,
+    bias_state: str | None = None,
+    bias_city: list[str] | None = None,
+    all_state: bool = False,
     emit: str = "human",
 ):
     """Search summarized FEC contributions data."""
     data_manager = DataManager(data) if data is not None else DataManager.default()
+    area_code_provider = AreaCodeManager.from_data_manager(data_manager)
+    zip_code_provider = ZipCodeManager.from_data_manager(data_manager)
     searcher = ContactContributionSearcher(data_manager)
 
     contact_provider: IContactProvider | None = None
@@ -422,19 +479,53 @@ def search(
             "You must provide a contact dir, zip file, or explicit name & zip."
         )
 
-    summaries = searcher.search_and_summarize_contacts(contact_provider)
-    sorted_summaries = sorted(
-        summaries,
-        key=lambda contact_summary: contact_summary[0].last_name.upper(),
-    )
+    # Add bias.
+    if bias_state is not None and bias_city:
+        contact_provider = RefineContactProvider(
+            contact_provider, area_code_provider, zip_code_provider
+        )
+        contact_provider = BiasContactProvider(
+            contact_provider,
+            {c.upper() for c in bias_city},
+            {bias_state.upper()},
+        )
+
+    if all_state:
+        contact_provider = RefineContactProvider(
+            contact_provider, area_code_provider, zip_code_provider
+        )
+        contact_provider = BiasContactProvider(
+            contact_provider,
+            set(),
+            {state.upper() for state in STATES},
+        )
+
     if emit == "human":
+        summaries = searcher.search_and_summarize_contacts(contact_provider)
+        sorted_summaries = sorted(
+            summaries,
+            key=lambda contact_summary: contact_summary[0].last_name.upper(),
+        )
         _emit_human(sorted_summaries)
     elif emit == "csv-overview" or emit == "xlsx-overview":
+        summaries = searcher.search_and_summarize_contacts(contact_provider)
+        sorted_summaries = sorted(
+            summaries,
+            key=lambda contact_summary: contact_summary[0].last_name.upper(),
+        )
         _wrap_emit(emit == "xlsx-overview", _emit_overview_csv)(sorted_summaries)
     elif emit == "csv-contributions" or emit == "xlsx-contributions":
+        summaries = searcher.search_and_summarize_contacts(contact_provider)
+        sorted_summaries = sorted(
+            summaries,
+            key=lambda contact_summary: contact_summary[0].last_name.upper(),
+        )
         _wrap_emit(emit == "xlsx-contributions", _emit_contributions_csv)(
             sorted_summaries
         )
+    elif emit == "csv-unmatched" or emit == "xlsx-unmatched":
+        unmatched_contacts = searcher.emit_unmatched_contacts(contact_provider)
+        _wrap_emit(emit == "xlsx-unmatched", _emit_unmatched_csv)(unmatched_contacts)
     else:
         raise click.UsageError(f"Unknown emit format: {emit}")
 

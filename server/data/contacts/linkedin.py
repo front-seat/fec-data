@@ -5,10 +5,10 @@ import typing as t
 from server.data.phone import normalize_e164
 from server.utils.validations import validate_extant_file
 
-from . import Contact
+from . import Contact, IContactProvider
 
 
-class LinkedInContactsManager:
+class LinkedInContactsManager(IContactProvider):
     """
     Implements IContactProvider (see __init__.py) that supports LinkedIn's
     contacts CSV export format. (Note that LinkedIn also offers 'connections'

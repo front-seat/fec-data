@@ -76,14 +76,14 @@ class Contact:
         return self.npa_id is not None
 
     @property
-    def duplicate_key(self) -> tuple[str, str, str, str]:
+    def duplicate_key(self) -> tuple[str, str, str | None, str | None]:
         """
         Return a 'unique enough' key for the contact.
 
         Contact keys are used to determine if two contacts are the same.
         """
-        assert self.city
-        assert self.state
+        # assert self.city
+        # assert self.state
         return (self.first_name, self.last_name, self.city, self.state)
 
 

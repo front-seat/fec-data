@@ -7,10 +7,10 @@ import zipfile
 from server.data.phone import normalize_e164
 from server.utils.validations import validate_extant_dir, validate_extant_file
 
-from . import Contact
+from . import Contact, IContactProvider
 
 
-class ABBUManagerBase(abc.ABC):
+class ABBUManagerBase(abc.ABC, IContactProvider):
     """
     An abstract IContactProvider (see __init__.py) that supports Apple's Address Book
     Backup format. We offer two implementations: one for a directory and one for a

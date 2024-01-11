@@ -62,3 +62,12 @@ class ContactContributionSearcher:
             result = self.search_and_summarize(contact)
             if result is not None:
                 yield result
+
+    def emit_unmatched_contacts(
+        self, contacts: IContactProvider
+    ) -> t.Iterable[Contact]:
+        """Emit contacts that were not matched."""
+        for contact in contacts.get_contacts():
+            result = self.search_and_summarize(contact)
+            if result is None:
+                yield contact
