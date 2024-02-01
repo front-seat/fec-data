@@ -75,11 +75,19 @@ def contacts():
     required=False,
     default=None,
 )
+@click.option(
+    "--emit",
+    type=str,
+    required=False,
+    default="json",
+    help="Output format. One of: json, csv",
+)
 def list_contacts(
     contact_dir: str | None = None,
     contact_zip: str | None = None,
     google: str | None = None,
     linkedin: str | None = None,
+    emit: str = "json",
 ):
     """List contacts."""
     contact_provider: IContactProvider | None = None
@@ -98,13 +106,41 @@ def list_contacts(
             "You must provide a contact dir, zip file, or explicit name & zip."
         )
 
-    seen_contacts = set()
+    seen_contact_ids = set()
+
+    writer = None
+    if emit == "csv":
+        writer = csv.DictWriter(
+            click.get_text_stream("stdout"),
+            fieldnames=[
+                "last_name",
+                "first_name",
+                "city",
+                "state",
+                "zip",
+                "phone",
+            ],
+        )
+        writer.writeheader()
 
     for contact in contact_provider.get_contacts():
-        if contact.without_zip() in seen_contacts:
+        if contact.import_id in seen_contact_ids:
             continue
-        seen_contacts.add(contact.without_zip())
-        print(json.dumps(contact.to_data()))
+        seen_contact_ids.add(contact.import_id)
+        if emit == "json":
+            print(json.dumps(contact.to_data()))
+        else:
+            assert writer
+            writer.writerow(
+                {
+                    "last_name": contact.last_name.title(),
+                    "first_name": contact.first_name.title(),
+                    "city": (contact.city or "").title(),
+                    "state": contact.state,
+                    "zip": contact.zip_code,
+                    "phone": contact.phone,
+                }
+            )
 
 
 @fec.group()
